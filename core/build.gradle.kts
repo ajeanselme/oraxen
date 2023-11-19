@@ -37,20 +37,20 @@ java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(17))
 }
 
-publishing {
-    val publishData = PublishData(project)
-    publications {
-        create<MavenPublication>("maven") {
-            groupId = rootProject.group.toString()
-            artifactId = rootProject.name
-            version = publishData.getVersion()
-
-            from(components["java"])
-        }
-    }
-
-    repositories {
-        maven {
+//publishing {
+//    val publishData = PublishData(project)
+//    publications {
+//        create<MavenPublication>("maven") {
+//            groupId = rootProject.group.toString()
+//            artifactId = rootProject.name
+//            version = publishData.getVersion()
+//
+//            from(components["java"])
+//        }
+//    }
+//
+//    repositories {
+//        maven {
 //            authentication {
 //                credentials(PasswordCredentials::class) {
 //                    username = System.getenv("MAVEN_USERNAME") ?: project.findProperty("oraxenUsername") as String
@@ -61,11 +61,11 @@ publishing {
 //                }
 //            }
 
-            url = uri(publishData.getRepository())
-            name = "oraxen"
-        }
-    }
-}
+//            url = uri(publishData.getRepository())
+//            name = "oraxen"
+//        }
+//    }
+//}
 
 class PublishData(private val project: Project) {
     var type: Type = getReleaseType()
