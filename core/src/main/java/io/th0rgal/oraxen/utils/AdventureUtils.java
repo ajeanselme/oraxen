@@ -2,6 +2,7 @@ package io.th0rgal.oraxen.utils;
 
 import io.th0rgal.oraxen.config.Message;
 import io.th0rgal.oraxen.font.GlyphTag;
+import io.th0rgal.oraxen.font.SATags;
 import io.th0rgal.oraxen.font.ShiftTag;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -28,13 +29,15 @@ public class AdventureUtils {
             TagResolver.resolver("prefix", Tag.selfClosingInserting(MINI_MESSAGE_EMPTY.deserialize(Message.PREFIX.toString())))
     );
 
+    public static final TagResolver CustomResolvers = TagResolver.builder().resolvers(OraxenTagResolver, SATags.getResolver()).build();
+
     public static final LegacyComponentSerializer LEGACY_SERIALIZER =
             LegacyComponentSerializer.builder().hexColors().useUnusualXRepeatedCharacterHexFormat().build();
 
     public static final LegacyComponentSerializer LEGACY_AMPERSAND =
             LegacyComponentSerializer.builder().character('&').hexColors().useUnusualXRepeatedCharacterHexFormat().build();
 
-    public static final MiniMessage MINI_MESSAGE = MiniMessage.builder().tags(OraxenTagResolver).build();
+    public static final MiniMessage MINI_MESSAGE = MiniMessage.builder().tags(CustomResolvers).build();
 
 
     public static MiniMessage MINI_MESSAGE_PLAYER(Player player) {
