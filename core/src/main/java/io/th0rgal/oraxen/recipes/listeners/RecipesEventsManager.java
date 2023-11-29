@@ -49,7 +49,7 @@ public class RecipesEventsManager implements Listener {
         if (!Objects.equals(first, firstIngredient) || !Objects.equals(second, secondIngredient)) event.setCancelled(true);
     }
 
-    @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGHEST)
+    @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
     public void onCrafted(PrepareItemCraftEvent event) {
         Recipe recipe = event.getRecipe();
         Player player = (Player) event.getView().getPlayer();
@@ -65,7 +65,7 @@ public class RecipesEventsManager implements Listener {
         if (whitelistedCraftRecipes.stream().anyMatch(w -> w.equals(current))) return;
         if (current.isValidDyeRecipe()) return;
 
-        event.getInventory().setResult(null);
+//        event.getInventory().setResult(null);
     }
 
     @EventHandler
