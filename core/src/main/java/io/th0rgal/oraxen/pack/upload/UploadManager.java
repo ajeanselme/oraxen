@@ -8,6 +8,7 @@ import io.th0rgal.oraxen.pack.dispatch.BukkitPackSender;
 import io.th0rgal.oraxen.pack.dispatch.PackSender;
 import io.th0rgal.oraxen.pack.generation.ResourcePack;
 import io.th0rgal.oraxen.pack.receive.PackReceiver;
+import io.th0rgal.oraxen.pack.upload.hosts.CustomProvider;
 import io.th0rgal.oraxen.pack.upload.hosts.HostingProvider;
 import io.th0rgal.oraxen.pack.upload.hosts.Polymath;
 import io.th0rgal.oraxen.utils.AdventureUtils;
@@ -96,6 +97,7 @@ public class UploadManager {
     private HostingProvider createHostingProvider() {
         HostingProvider provider = switch (Settings.UPLOAD_TYPE.toString().toLowerCase(Locale.ENGLISH)) {
             case "polymath" -> new Polymath(Settings.POLYMATH_SERVER.toString());
+            case "custom" -> new CustomProvider(Settings.CUSTOM_SERVER.toString());
             case "external" -> createExternalProvider();
             default -> null;
         };

@@ -95,6 +95,9 @@ public enum Settings {
     POLYMATH_SERVER("Pack.upload.polymath.server"),
     POLYMATH_SECRET("Pack.upload.polymath.secret"),
 
+    CUSTOM_SERVER("Pack.upload.custom.server"),
+    CUSTOM_SECRET("Pack.upload.custom.secret"),
+
     SEND_PACK("Pack.dispatch.send_pack"),
     SEND_ON_RELOAD("Pack.dispatch.send_on_reload"),
     SEND_PACK_DELAY("Pack.dispatch.delay"),
