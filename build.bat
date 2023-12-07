@@ -1,2 +1,3 @@
-gradlew build
-PAUSE
+@echo off
+call gradlew build publishMavenPublicationToMavenLocal
+pause
