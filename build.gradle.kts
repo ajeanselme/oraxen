@@ -7,7 +7,7 @@ plugins {
     //id("com.github.johnrengelman.shadow") version "8.1.1"
     id("xyz.jpenilla.run-paper") version "2.2.0"
     id("net.minecrell.plugin-yml.bukkit") version "0.6.0" // Generates plugin.yml
-    id("io.papermc.paperweight.userdev") version "1.5.6" apply false
+    id("io.papermc.paperweight.userdev") version "1.5.11" apply false
     alias(libs.plugins.shadowjar)
     alias(libs.plugins.mia.publication)
 }
@@ -21,7 +21,8 @@ val SUPPORTED_VERSIONS: List<NMSVersion> = listOf(
     "v1_19_R2" toNms "1.19.3-R0.1-SNAPSHOT",
     "v1_19_R3" toNms "1.19.4-R0.1-SNAPSHOT",
     "v1_20_R1" toNms "1.20.1-R0.1-SNAPSHOT",
-    "v1_20_R2" toNms "1.20.2-R0.1-SNAPSHOT"
+    "v1_20_R2" toNms "1.20.2-R0.1-SNAPSHOT",
+    "v1_20_R3" toNms "1.20.4-R0.1-SNAPSHOT"
 )
 
 SUPPORTED_VERSIONS.forEach {
@@ -36,6 +37,7 @@ SUPPORTED_VERSIONS.forEach {
         }
 
         dependencies {
+            compileOnly("io.papermc.paper:paper-api:" + it.serverVersion)
             implementation(project(":core"))
             paperDevBundle(it.serverVersion)
         }
@@ -48,7 +50,7 @@ val devPluginPath = project.findProperty("oraxen_dev_plugin_path")?.toString()
 val foliaPluginPath = project.findProperty("oraxen_folia_plugin_path")?.toString()
 val spigotPluginPath = project.findProperty("oraxen_spigot_plugin_path")?.toString()
 val pluginVersion = project.findProperty("pluginVersion").toString().plus("-custom")
-val commandApiVersion = "9.2.0"
+val commandApiVersion = "9.3.0"
 val adventureVersion = "4.14.0"
 val platformVersion = "4.3.1"
 group = "io.th0rgal"
@@ -69,7 +71,6 @@ allprojects {
         maven("https://hub.jeff-media.com/nexus/repository/jeff-media-public/") // CustomBlockData
         maven("https://repo.triumphteam.dev/snapshots") // actions-code, actions-spigot
         maven("https://mvn.lumine.io/repository/maven-public/") { metadataSources { artifact() } }// MythicMobs
-        //maven("https://mvn.lumine.io/repository/maven/") // PlayerAnimator
         maven("https://repo.mineinabyss.com/releases") // PlayerAnimator
         maven("https://s01.oss.sonatype.org/content/repositories/snapshots") // commandAPI snapshots
         maven("https://repo.auxilor.io/repository/maven-public/") // EcoItems
@@ -77,6 +78,7 @@ allprojects {
         maven("https://repo.oraxen.com/releases")
         maven("https://repo.oraxen.com/snapshots")
         maven("https://jitpack.io") // JitPack
+        maven("https://nexus.phoenixdevt.fr/repository/maven-public/") //MMOItems
 
         mavenLocal()
     }
@@ -84,7 +86,6 @@ allprojects {
     dependencies {
         val actionsVersion = "1.0.0-SNAPSHOT"
 
-        compileOnly("io.papermc.paper:paper-api:1.20.2-R0.1-SNAPSHOT")
         compileOnly("net.kyori:adventure-text-minimessage:$adventureVersion")
         compileOnly("net.kyori:adventure-text-serializer-plain:$adventureVersion")
         compileOnly("net.kyori:adventure-text-serializer-ansi:$adventureVersion")
@@ -103,7 +104,7 @@ allprojects {
         compileOnly(files("../libs/compile/BSP.jar"))
         compileOnly("dev.jorel:commandapi-bukkit-shade:$commandApiVersion")
         compileOnly("io.lumine:MythicLib:1.1.6")
-        compileOnly("net.Indyuce:MMOItems:6.7.3")
+        compileOnly("net.Indyuce:MMOItems-API:6.9.5-SNAPSHOT")
         compileOnly("org.joml:joml:1.10.5") // Because pre 1.19.4 api does not have this in the server-jar
         compileOnly("com.willfp:EcoItems:5.23.0")
         compileOnly("com.willfp:eco:6.65.5")

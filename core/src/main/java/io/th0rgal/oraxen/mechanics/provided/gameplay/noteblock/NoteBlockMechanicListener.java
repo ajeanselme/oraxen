@@ -16,7 +16,9 @@ import io.th0rgal.oraxen.utils.Utils;
 import io.th0rgal.oraxen.utils.VersionUtil;
 import io.th0rgal.oraxen.utils.breaker.BreakerSystem;
 import io.th0rgal.oraxen.utils.breaker.HardnessModifier;
+import io.th0rgal.oraxen.utils.logs.Logs;
 import io.th0rgal.protectionlib.ProtectionLib;
+import org.apache.commons.lang3.Range;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
@@ -219,7 +221,7 @@ public class NoteBlockMechanicListener implements Listener {
         if (!player.isSneaking() && BlockHelpers.isInteractable(block)) return;
 
         NoteBlockMechanic mechanic = OraxenBlocks.getNoteBlockMechanic(block);
-        if (mechanic == null) return;
+        if (mechanic == null || OraxenBlocks.isOraxenNoteBlock(item)) return;
         if (mechanic.isDirectional() && !mechanic.getDirectional().isParentBlock())
             mechanic = mechanic.getDirectional().getParentMechanic();
 
@@ -227,58 +229,8 @@ public class NoteBlockMechanicListener implements Listener {
         if (!EventUtils.callEvent(new OraxenNoteBlockInteractEvent(mechanic, player, item, hand, block, blockFace))) event.setCancelled(true);
         if (item == null) return;
 
-        Block relative = block.getRelative(blockFace);
         Material type = item.getType();
         if (type == Material.AIR) return;
-
-        if (type == Material.BUCKET && relative.getBlockData() instanceof Levelled levelled && levelled.getLevel() == levelled.getMaximumLevel()) {
-            final Sound sound;
-            if (relative.getType() == Material.WATER) sound = Sound.ITEM_BUCKET_FILL;
-            else sound = Sound.valueOf("ITEM_BUCKET_FILL_" + relative.getType());
-
-            if (player.getGameMode() != GameMode.CREATIVE)
-                item.setType(Objects.requireNonNull(Material.getMaterial(relative.getType() + "_BUCKET")));
-
-            player.playSound(relative.getLocation(), sound, 1.0f, 1.0f);
-            relative.setType(Material.AIR, true);
-            return;
-        }
-
-        if (!Settings.NMS_BLOCK_CORRECTION.toBool()) {
-            final boolean bucketCheck = type.toString().endsWith("_BUCKET");
-            final String bucketBlock = type.toString().replace("_BUCKET", "");
-            EntityType bucketEntity;
-            try {
-                bucketEntity = EntityType.valueOf(bucketBlock);
-            } catch (IllegalArgumentException e) {
-                bucketEntity = null;
-            }
-
-            if (bucketCheck && type != Material.MILK_BUCKET) {
-                if (bucketEntity == null)
-                    type = Material.getMaterial(bucketBlock);
-                else {
-                    type = Material.WATER;
-                    player.getWorld().spawnEntity(relative.getLocation().add(0.5, 0.0, 0.5), bucketEntity);
-                }
-            }
-
-            if (type != null && type.hasGravity() && relative.getRelative(BlockFace.DOWN).getType().isAir()) {
-                BlockData data = type.createBlockData();
-                if (type.toString().endsWith("ANVIL")) ((Directional) data).setFacing(getAnvilFacing(event.getBlockFace()));
-                BlockHelpers.playCustomBlockSound(relative.getLocation(), data.getSoundGroup().getPlaceSound().getKey().toString(), data.getSoundGroup().getVolume(), data.getSoundGroup().getPitch());
-                block.getWorld().spawnFallingBlock(BlockHelpers.toCenterBlockLocation(relative.getLocation()), data);
-                if (player.getGameMode() != GameMode.CREATIVE) item.setAmount(item.getAmount() - 1);
-                return;
-            }
-        }
-        else {
-            if (type.toString().contains("_BUCKET")) {
-                if (type == Material.MILK_BUCKET) return;
-                else if (type == Material.LAVA_BUCKET) type = Material.LAVA;
-                else type = Material.WATER;
-            }
-        }
 
         BlockData newData = type != null && type.isBlock() ? type.createBlockData() : null;
         makePlayerPlaceBlock(player, event.getHand(), item, block, event.getBlockFace(), newData);
@@ -311,7 +263,6 @@ public class NoteBlockMechanicListener implements Listener {
         }
 
         BlockData data = NoteBlockMechanicFactory.createNoteBlockData(customVariation);
-
         makePlayerPlaceBlock(player, event.getHand(), event.getItem(), placedAgainst, face, data);
     }
 
@@ -341,12 +292,11 @@ public class NoteBlockMechanicListener implements Listener {
 
     @EventHandler
     public void onExplosionDestroy(EntityExplodeEvent event) {
-        List<Block> blockList = event.blockList().stream().filter(block -> block.getType().equals(Material.NOTE_BLOCK)).toList();
-        blockList.forEach(block -> {
-            NoteBlockMechanic mechanic = OraxenBlocks.getNoteBlockMechanic(block);
-            if (mechanic != null)
-                OraxenBlocks.remove(block.getLocation(), null);
-        });
+        for (Block block : new HashSet<>(event.blockList())) {
+            if (!OraxenBlocks.isOraxenNoteBlock(block)) continue;
+            OraxenBlocks.remove(block.getLocation(), null);
+            event.blockList().remove(block);
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -490,23 +440,22 @@ public class NoteBlockMechanicListener implements Listener {
     public void makePlayerPlaceBlock(final Player player, final EquipmentSlot hand, final ItemStack item,
                                      final Block placedAgainst, final BlockFace face, final BlockData newData) {
         final Block target;
-        final String sound;
         final Material type = placedAgainst.getType();
 
         if (BlockHelpers.isReplaceable(type)) target = placedAgainst;
         else {
             target = placedAgainst.getRelative(face);
-            if (!target.getType().isAir() && !target.isLiquid() && target.getType() != Material.LIGHT) return;
+            if (!BlockHelpers.isReplaceable(target.getType())) return;
         }
 
         final NoteBlockMechanic againstMechanic = OraxenBlocks.getNoteBlockMechanic(placedAgainst);
         final BlockPlaceEvent blockPlaceEvent = new BlockPlaceEvent(target, target.getState(), placedAgainst, item, player, true, hand);
-
         if (againstMechanic != null && (againstMechanic.isStorage() || againstMechanic.hasClickActions()))
             blockPlaceEvent.setCancelled(true);
         if (BlockHelpers.isStandingInside(player, target) || !ProtectionLib.canBuild(player, target.getLocation()))
             blockPlaceEvent.setCancelled(true);
-
+        if (!Range.between(target.getWorld().getMinHeight(), target.getWorld().getMaxHeight() - 1).contains(target.getY()))
+            blockPlaceEvent.setCancelled(true);
         if (!EventUtils.callEvent(blockPlaceEvent) || !blockPlaceEvent.canBuild()) return;
 
         // This method is run for placing on custom blocks aswell, so this should not be called for vanilla blocks
@@ -522,10 +471,7 @@ public class NoteBlockMechanicListener implements Listener {
 
             if (player.getGameMode() != GameMode.CREATIVE) item.setAmount(item.getAmount() - 1);
             Utils.swingHand(player, hand);
-            return;
-        }
-
-        BlockHelpers.correctAllBlockStates(placedAgainst, player, hand, face, item, newData);
+        } else BlockHelpers.correctAllBlockStates(placedAgainst, player, hand, face, item, newData);
     }
 
     // Used to determine what instrument to use when playing a note depending on below block

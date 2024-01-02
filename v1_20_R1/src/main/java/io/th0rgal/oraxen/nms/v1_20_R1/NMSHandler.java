@@ -6,10 +6,14 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.MessageToByteEncoder;
+import io.netty.util.Attribute;
+import io.netty.util.AttributeKey;
+import io.papermc.paper.adventure.PaperAdventure;
 import io.papermc.paper.configuration.GlobalConfiguration;
 import io.th0rgal.oraxen.OraxenPlugin;
 import io.th0rgal.oraxen.config.Settings;
 import io.th0rgal.oraxen.font.GlyphTag;
+import io.th0rgal.oraxen.nms.GlyphHandlers;
 import io.th0rgal.oraxen.nms.NMSHandlers;
 import io.th0rgal.oraxen.utils.AdventureUtils;
 import io.th0rgal.oraxen.utils.VersionUtil;
@@ -26,23 +30,26 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.game.ClientboundPlayerChatPacket;
 import net.minecraft.network.protocol.game.ClientboundUpdateTagsPacket;
+import net.minecraft.network.protocol.game.ServerboundChatPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerConnectionListener;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagNetworkSerialization;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.DirectionalPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.BlockData;
@@ -53,8 +60,8 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -91,19 +98,18 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
     }
 
     @Override
-    @Nullable
-    public BlockData correctBlockStates(Player player, EquipmentSlot slot, ItemStack itemStack, Block block, BlockFace blockFace) {
-        BlockHitResult hitResult = getBlockHitResult(player, block, blockFace);
-        InteractionHand hand = slot == EquipmentSlot.HAND ? InteractionHand.MAIN_HAND : slot == EquipmentSlot.OFF_HAND ? InteractionHand.OFF_HAND : null;
-        if (hitResult == null || hand == null) return null;
-
+    @javax.annotation.Nullable
+    public BlockData correctBlockStates(Player player, EquipmentSlot slot, ItemStack itemStack) {
+        InteractionHand hand = slot == EquipmentSlot.HAND ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
         net.minecraft.world.item.ItemStack nmsStack = CraftItemStack.asNMSCopy(itemStack);
         ServerPlayer serverPlayer = ((CraftPlayer) player).getHandle();
+        BlockHitResult hitResult = getPlayerPOVHitResult(serverPlayer.level(), serverPlayer, ClipContext.Fluid.NONE);
         BlockPlaceContext placeContext = new BlockPlaceContext(new UseOnContext(serverPlayer, hand, hitResult));
 
+        if (serverPlayer.getCooldowns().isOnCooldown(nmsStack.getItem())) return null;
+
         if (!(nmsStack.getItem() instanceof BlockItem blockItem)) {
-            InteractionResultHolder<net.minecraft.world.item.ItemStack> result = nmsStack.getItem().use(serverPlayer.level(), serverPlayer, hand);
-            if (result.getResult() == InteractionResult.CONSUME) player.getInventory().setItem(slot, CraftItemStack.asBukkitCopy(result.getObject()));
+            serverPlayer.gameMode.useItem(serverPlayer, serverPlayer.level(), nmsStack, hand);
             return null;
         }
 
@@ -116,16 +122,23 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
         InteractionResult result = blockItem.place(placeContext);
         if (result == InteractionResult.FAIL) return null;
         if (placeContext instanceof DirectionalPlaceContext && player.getGameMode() != org.bukkit.GameMode.CREATIVE) itemStack.setAmount(itemStack.getAmount() - 1);
-        return block.getWorld().getBlockAt(pos.getX(), pos.getY(), pos.getZ()).getBlockData();
+        return player.getWorld().getBlockAt(pos.getX(), pos.getY(), pos.getZ()).getBlockData();
     }
 
     @Override
-    public @Nullable BlockHitResult getBlockHitResult(Player player, Block block, BlockFace blockFace) {
-        Vec3 vec3 = new Vec3(player.getEyeLocation().getX(), player.getEyeLocation().getY(), player.getEyeLocation().getZ());
-        Direction direction = Arrays.stream(Direction.values()).filter(d -> d.name().equals(blockFace.name())).findFirst().orElse(null);
-        if (direction == null) return null;
-        BlockPos blockPos = new BlockPos(block.getX(), block.getY(), block.getZ()).relative(direction);
-        return new BlockHitResult(vec3, direction.getOpposite(), blockPos, false);
+    public BlockHitResult getPlayerPOVHitResult(Level world, net.minecraft.world.entity.player.Player player, ClipContext.Fluid fluidHandling) {
+        float f = player.getXRot();
+        float g = player.getYRot();
+        Vec3 vec3 = player.getEyePosition();
+        float h = Mth.cos(-g * ((float)Math.PI / 180F) - (float)Math.PI);
+        float i = Mth.sin(-g * ((float)Math.PI / 180F) - (float)Math.PI);
+        float j = -Mth.cos(-f * ((float)Math.PI / 180F));
+        float k = Mth.sin(-f * ((float)Math.PI / 180F));
+        float l = i * j;
+        float n = h * j;
+        double d = 5.0D;
+        Vec3 vec32 = vec3.add((double)l * d, (double)k * d, (double)n * d);
+        return world.clip(new ClipContext(vec3, vec32, ClipContext.Block.OUTLINE, fluidHandling, player));
     }
 
     @Override
@@ -191,7 +204,7 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
                     // This can take a while, so we need to stop the main thread from interfering
                     synchronized (networkManagers) {
                         // Stop injecting channels
-                        channel.eventLoop().submit(() -> inject(channel));
+                        channel.eventLoop().submit(() -> inject(channel, null));
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -221,10 +234,9 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
                     ChannelInitializer<Channel> initializer = (ChannelInitializer<Channel>) original.get(handler);
                     ChannelInitializer<Channel> miniInit = new ChannelInitializer<>() {
                         @Override
-                        protected void initChannel(@NotNull Channel ch) throws Exception {
-                            initChannel.invoke(initializer, ch);
-                            channel.eventLoop().submit(() -> inject(channel));
-                            inject(ch);
+                        protected void initChannel(@NotNull Channel channel) throws Exception {
+                            initChannel.invoke(initializer, channel);
+                            channel.eventLoop().submit(() -> inject(channel, null));
                         }
                     };
                     original.set(handler, miniInit);
@@ -251,6 +263,9 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
                 }
             }.runTask(OraxenPlugin.get());
         }
+
+        if (VersionUtil.isPaperServer())
+            Bukkit.getPluginManager().registerEvents(new GlyphListener(), OraxenPlugin.get());
     }
 
     @Override
@@ -258,16 +273,7 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
         if (player == null || !Settings.NMS_GLYPHS.toBool()) return;
         Channel channel = ((CraftPlayer) player).getHandle().connection.connection.channel;
 
-        channel.eventLoop().submit(() -> inject(channel));
-
-        for (Map.Entry<String, ChannelHandler> entry : channel.pipeline()) {
-            ChannelHandler handler = entry.getValue();
-            if (handler instanceof CustomPacketEncoder) {
-                ((CustomPacketEncoder) handler).setPlayer(player);
-            } else if (handler instanceof CustomPacketDecoder) {
-                ((CustomPacketDecoder) handler).setPlayer(player);
-            }
-        }
+        channel.eventLoop().submit(() -> inject(channel, player));
     }
 
     @Override
@@ -276,6 +282,16 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
         Channel channel = ((CraftPlayer) player).getHandle().connection.connection.channel;
 
         uninject(channel);
+    }
+
+    private void inject(Channel channel, @javax.annotation.Nullable Player player) {
+        // Replace the vanilla PacketEncoder with our own
+        if (!(channel.pipeline().get("encoder") instanceof CustomPacketEncoder))
+            encoder.putIfAbsent(channel, channel.pipeline().replace("encoder", "encoder", new CustomPacketEncoder(player)));
+
+        // Replace the vanilla PacketDecoder with our own
+        if (!(channel.pipeline().get("decoder") instanceof CustomPacketDecoder))
+            decoder.putIfAbsent(channel, channel.pipeline().replace("decoder", "decoder", new CustomPacketDecoder(player)));
     }
 
     private void uninject(Channel channel) {
@@ -298,47 +314,30 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
         }
     }
 
-    private void inject(Channel channel) {
-        if (!encoder.containsKey(channel)) {
-            // Replace the vanilla PacketEncoder with our own
-            ChannelHandler handler = channel.pipeline().get("encoder");
-            if (!(handler instanceof CustomPacketEncoder)) {
-                encoder.put(channel, channel.pipeline().replace("encoder", "encoder", new CustomPacketEncoder()));
-            }
-        }
-
-        if (!decoder.containsKey(channel)) {
-            // Replace the vanilla PacketDecoder with our own
-            ChannelHandler handler = channel.pipeline().get("decoder");
-            if (!(handler instanceof CustomPacketDecoder)) {
-                decoder.put(channel, channel.pipeline().replace("decoder", "decoder", new CustomPacketDecoder()));
-            }
-        }
-    }
-
     private void bind(List<ChannelFuture> channelFutures, ChannelInboundHandlerAdapter serverChannelHandler) {
-        for (ChannelFuture future : channelFutures) {
-            future.channel().pipeline().addFirst(serverChannelHandler);
-        }
-
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            inject(player);
-        }
+        for (ChannelFuture future : channelFutures) future.channel().pipeline().addFirst(serverChannelHandler);
+        for (Player player : Bukkit.getOnlinePlayers()) inject(player);
     }
 
     private static class CustomDataSerializer extends FriendlyByteBuf {
-        private final Supplier<Player> supplier;
+        @javax.annotation.Nullable
+        private final Player player;
 
-        public CustomDataSerializer(Supplier<Player> supplier, ByteBuf bytebuf) {
+        public CustomDataSerializer(@javax.annotation.Nullable Player player, ByteBuf bytebuf) {
             super(bytebuf);
-
-            this.supplier = supplier;
+            this.player = player;
         }
 
         @NotNull
         @Override
         public FriendlyByteBuf writeComponent(@NotNull Component component) {
-            return super.writeComponent(AdventureUtils.parseMiniMessage(component, GlyphTag.getResolverForPlayer(supplier.get())));
+            return super.writeComponent(GlyphHandlers.transform(component, null, false));
+        }
+
+        @NotNull
+        @Override
+        public net.minecraft.network.chat.Component readComponent() {
+            return PaperAdventure.asVanilla((GlyphHandlers.transform(PaperAdventure.asAdventure(super.readComponent()), player, false)));
         }
 
         @Override
@@ -346,29 +345,32 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
             try {
                 JsonElement element = JsonParser.parseString(string);
                 if (element.isJsonObject())
-                    return super.writeUtf(NMSHandlers.formatJsonString(element.getAsJsonObject()), maxLength);
+                    return super.writeUtf(GlyphHandlers.formatJsonString(element.getAsJsonObject(), null), maxLength);
             } catch (Exception ignored) {
-
             }
 
             return super.writeUtf(string, maxLength);
         }
 
         @Override
-        public @NotNull FriendlyByteBuf writeNbt(CompoundTag compound) {
-            if (compound != null) {
-                transform(compound, string -> {
-                    try {
-                        JsonElement element = JsonParser.parseString(string);
-                        if (element.isJsonObject())
-                            return NMSHandlers.formatJsonString(element.getAsJsonObject());
-                    } catch (Exception ignored) {
-                    }
-                    return string;
-                });
-            }
+        public @NotNull String readUtf(int i) {
+            Component component = AdventureUtils.MINI_MESSAGE_EMPTY.deserialize(super.readUtf(i));
+            return AdventureUtils.MINI_MESSAGE_EMPTY.serialize(GlyphHandlers.transform(component, player, true));
+        }
 
-            return super.writeNbt(compound);
+        @NotNull
+        @Override
+        public FriendlyByteBuf writeNbt(CompoundTag tag) {
+            transform(tag, GlyphHandlers.transformer(null));
+            return super.writeNbt(tag);
+        }
+
+        @Override
+        public @Nullable CompoundTag readNbt() {
+            CompoundTag compound = super.readNbt();
+            if (compound != null) transform(compound, GlyphHandlers.transformer(player));
+
+            return compound;
         }
 
         private void transform(CompoundTag compound, Function<String, String> transformer) {
@@ -381,36 +383,26 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
         }
 
         private void transform(ListTag list, Function<String, String> transformer) {
-            for (Tag base : List.copyOf(list)) {
+            List<Tag> listCopy = List.copyOf(list);
+            for (Tag base : listCopy) {
                 if (base instanceof CompoundTag tag) transform(tag, transformer);
                 else if (base instanceof ListTag listTag) transform(listTag, transformer);
                 else if (base instanceof StringTag) {
-                    String transformed = transformer.apply(base.getAsString());
-                    if (base.getAsString().equals(transformed)) continue;
                     int index = list.indexOf(base);
-                    list.add(index, StringTag.valueOf(transformed));
-                    list.remove(index + 1);
+                    list.set(index, StringTag.valueOf(transformer.apply(base.getAsString())));
                 }
             }
-        }
-
-        @Override
-        public @NotNull String readUtf(int i) {
-            return NMSHandlers.verifyFor(supplier.get(), super.readUtf(i));
-        }
-
-        @Override
-        public @Nullable CompoundTag readNbt(@NotNull NbtAccounter nbtAccounter) {
-            CompoundTag compound = super.readNbt(nbtAccounter);
-            if (compound != null) transform(compound, string -> NMSHandlers.verifyFor(supplier.get(), string));
-
-            return compound;
         }
     }
 
     private static class CustomPacketEncoder extends MessageToByteEncoder<Packet<?>> {
         private final PacketFlow protocolDirection = PacketFlow.CLIENTBOUND;
-        private Player player;
+        @Nullable private final Player player;
+
+        private CustomPacketEncoder(@Nullable Player player) {
+            super();
+            this.player = player;
+        }
 
         @Override
         protected void encode(ChannelHandlerContext ctx, Packet<?> msg, ByteBuf out) {
@@ -420,7 +412,7 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
             }
             int integer = enumProt.getPacketId(this.protocolDirection, msg);
 
-            FriendlyByteBuf packetDataSerializer = new CustomDataSerializer(() -> player, out);
+            FriendlyByteBuf packetDataSerializer = new CustomDataSerializer(player, out);
             packetDataSerializer.writeVarInt(integer);
 
             try {
@@ -434,21 +426,22 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
                 e.printStackTrace();
             }
         }
-
-        protected void setPlayer(Player player) {
-            this.player = player;
-        }
     }
 
     private static class CustomPacketDecoder extends ByteToMessageDecoder {
-        private Player player;
+        @javax.annotation.Nullable
+        private final Player player;
+
+        private CustomPacketDecoder(@Nullable Player player) {
+            this.player = player;
+        }
 
         @Override
         protected void decode(ChannelHandlerContext ctx, ByteBuf msg, List<Object> out) throws Exception {
             final ByteBuf bufCopy = msg.copy();
             if (msg.readableBytes() == 0) return;
 
-            CustomDataSerializer dataSerializer = new CustomDataSerializer(() -> player, msg);
+            CustomDataSerializer dataSerializer = new CustomDataSerializer(player, msg);
             int packetID = dataSerializer.readVarInt();
             ConnectionProtocol protocol = ctx.channel().attr(Connection.ATTRIBUTE_PROTOCOL).get();
             Packet<?> packet = protocol.createPacket(PacketFlow.SERVERBOUND, packetID, dataSerializer);
@@ -465,10 +458,6 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
                 packet = protocol.createPacket(PacketFlow.SERVERBOUND, packetID, serializer);
             }
             out.add(packet);
-        }
-
-        protected void setPlayer(Player player) {
-            this.player = player;
         }
     }
 

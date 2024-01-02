@@ -1,5 +1,6 @@
 package io.th0rgal.oraxen.utils;
 
+import com.google.common.collect.Sets;
 import com.jeff_media.customblockdata.CustomBlockData;
 import io.th0rgal.oraxen.OraxenPlugin;
 import io.th0rgal.oraxen.api.OraxenBlocks;
@@ -8,6 +9,7 @@ import io.th0rgal.oraxen.config.Settings;
 import io.th0rgal.oraxen.mechanics.provided.gameplay.furniture.FurnitureMechanic;
 import io.th0rgal.oraxen.mechanics.provided.gameplay.noteblock.NoteBlockMechanic;
 import io.th0rgal.oraxen.nms.NMSHandlers;
+import io.th0rgal.oraxen.utils.logs.Logs;
 import org.apache.commons.lang3.Range;
 import org.bukkit.*;
 import org.bukkit.block.Sign;
@@ -32,6 +34,7 @@ import org.bukkit.util.RayTraceResult;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 import static org.bukkit.block.data.FaceAttachable.AttachedFace.CEILING;
 import static org.bukkit.block.data.FaceAttachable.AttachedFace.FLOOR;
@@ -81,7 +84,7 @@ public class BlockHelpers {
 
     public static boolean isStandingInside(final Player player, final Block block) {
         if (player == null || block == null) return false;
-        final Location playerLoc = player.getLocation();
+        final Location playerLoc = player.getLocation().getBlock().getLocation();
         final Location blockLoc = BlockHelpers.toCenterLocation(block.getLocation());
         return Range.between(0.5, 1.5).contains(blockLoc.getY() - playerLoc.getY()) &&
                 Range.between(-0.80, 0.80).contains(blockLoc.getX() - playerLoc.getX())
@@ -103,9 +106,18 @@ public class BlockHelpers {
         return new CustomBlockData(block, plugin);
     }
 
-    public static final List<Material> REPLACEABLE_BLOCKS = Arrays
-            .asList(Material.SNOW, Material.VINE, Material.GRASS, Material.TALL_GRASS, Material.SEAGRASS, Material.FERN,
-                    Material.LARGE_FERN, Material.AIR);
+    public static final Set<Material> UNBREAKABLE_BLOCKS = Sets.newHashSet(Material.BEDROCK, Material.BARRIER, Material.NETHER_PORTAL, Material.END_PORTAL_FRAME, Material.END_PORTAL, Material.END_GATEWAY);
+
+    static {
+        if (VersionUtil.isSupportedVersionOrNewer("1.19")) UNBREAKABLE_BLOCKS.add(Material.REINFORCED_DEEPSLATE);
+        if (VersionUtil.isSupportedVersionOrNewer("1.20")) {
+            REPLACEABLE_BLOCKS = Tag.REPLACEABLE.getValues().stream().toList();
+        } else REPLACEABLE_BLOCKS = Arrays.asList(
+                Material.SNOW, Material.VINE, Material.valueOf("GRASS"), Material.TALL_GRASS, Material.SEAGRASS, Material.FERN,
+                Material.LARGE_FERN, Material.AIR, Material.WATER, Material.LAVA, Material.LIGHT);
+    }
+
+    public static final List<Material> REPLACEABLE_BLOCKS;
 
     public static boolean isReplaceable(Block block) {
         return REPLACEABLE_BLOCKS.contains(block.getType());
@@ -116,6 +128,7 @@ public class BlockHelpers {
     }
 
     public static boolean isReplaceable(Material material) {
+        Logs.debug("type: " + material);
         return REPLACEABLE_BLOCKS.contains(material);
     }
 
@@ -142,11 +155,26 @@ public class BlockHelpers {
         };
     }
 
+    public enum BlockCorrection {
+        NMS, LEGACY;
+
+        public static boolean useNMS() {
+            return get() == NMS;
+        }
+        public static BlockCorrection get() {
+            return Objects.equals(Settings.BLOCK_CORRECTION.toString(), "NMS") ? NMS : LEGACY;
+        }
+    }
     public static BlockData correctAllBlockStates(Block placedAgainst, Player player, EquipmentSlot hand, BlockFace face, ItemStack item, BlockData newData) {
         Block target = placedAgainst.getRelative(face);
         BlockData correctedData;
-        if (NMSHandlers.getHandler() != null  && Settings.NMS_BLOCK_CORRECTION.toBool())
-            correctedData = NMSHandlers.getHandler().correctBlockStates(player, hand, item, placedAgainst, face);
+        if (NMSHandlers.getHandler() != null && BlockCorrection.useNMS()) {
+            //TODO Fix boats, currently Item#use in BoatItem calls PlayerInteractEvent
+            // thus causing a StackOverflow, find a workaround
+            if (Tag.ITEMS_BOATS.isTagged(item.getType())) return null;
+            Logs.debug("Using NMS");
+            correctedData = NMSHandlers.getHandler().correctBlockStates(player, hand, item);
+        }
         else {
             if (newData == null) return null;
             // If not using NMS-method, the BlockData needs to be set beforehand
