@@ -41,7 +41,7 @@ public class AdventureUtils {
 
 
     public static MiniMessage MINI_MESSAGE_PLAYER(Player player) {
-        return MiniMessage.builder().tags(TagResolver.resolver(TagResolver.standard(), GlyphTag.getResolverForPlayer(player))).build();
+        return MiniMessage.builder().tags(TagResolver.resolver(CustomResolvers, GlyphTag.getResolverForPlayer(player))).build();
     }
 
     public static final GsonComponentSerializer GSON_SERIALIZER = GsonComponentSerializer.gson();
