@@ -4,6 +4,7 @@ import io.th0rgal.oraxen.OraxenPlugin;
 import io.th0rgal.oraxen.api.OraxenItems;
 import io.th0rgal.oraxen.config.Settings;
 import io.th0rgal.oraxen.recipes.CustomRecipe;
+import io.th0rgal.oraxen.utils.VersionUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.command.CommandSender;
@@ -35,6 +36,9 @@ public class RecipesEventsManager implements Listener {
 
     public void registerEvents() {
         Bukkit.getPluginManager().registerEvents(instance, OraxenPlugin.get());
+        if (VersionUtil.atOrAbove("1.20")) {
+            Bukkit.getPluginManager().registerEvents(new SmithingRecipeEvents(), OraxenPlugin.get());
+        }
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -44,8 +48,9 @@ public class RecipesEventsManager implements Listener {
         if (event.getSlot() != 2 || merchantInventory.getSelectedRecipe() == null) return;
 
         String first = OraxenItems.getIdByItem(merchantInventory.getItem(0)), second = OraxenItems.getIdByItem(merchantInventory.getItem(1));
-        List<ItemStack> ingredients = merchantInventory.getSelectedRecipe().getIngredients();
-        String firstIngredient = OraxenItems.getIdByItem(ingredients.get(0)), secondIngredient = OraxenItems.getIdByItem(ingredients.get(1));
+        ArrayList<ItemStack> ingredients = new ArrayList<>(merchantInventory.getSelectedRecipe().getIngredients());
+        String firstIngredient = ingredients.isEmpty() ? null : OraxenItems.getIdByItem(ingredients.get(0));
+        String secondIngredient = ingredients.size() < 2 ? null : OraxenItems.getIdByItem(ingredients.get(1));
         if (!Objects.equals(first, firstIngredient) || !Objects.equals(second, secondIngredient)) event.setCancelled(true);
     }
 
@@ -62,8 +67,7 @@ public class RecipesEventsManager implements Listener {
         if (!containsOraxenItem || recipe == null) return;
 
         CustomRecipe current = new CustomRecipe(null, recipe.getResult(), Arrays.asList(event.getInventory().getMatrix()));
-        if (whitelistedCraftRecipes.stream().anyMatch(w -> w.equals(current))) return;
-        if (current.isValidDyeRecipe()) return;
+        if (whitelistedCraftRecipes.stream().anyMatch(current::equals) || current.isValidDyeRecipe()) return;
 
 //        event.getInventory().setResult(null);
     }

@@ -3,7 +3,6 @@ package io.th0rgal.oraxen.pack.generation;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import io.th0rgal.oraxen.OraxenPlugin;
 import io.th0rgal.oraxen.api.OraxenItems;
 import io.th0rgal.oraxen.config.Settings;
 import io.th0rgal.oraxen.utils.Utils;
@@ -45,17 +44,26 @@ public class AtlasGenerator {
         OraxenItems.getItems().stream().filter(builder -> builder.hasOraxenMeta() && builder.getOraxenMeta().hasLayers())
                 .forEach(builder -> itemTextures.addAll(builder.getOraxenMeta().getLayers()));
 
-        Set<String> glyphTextures = new LinkedHashSet<>();
-        OraxenPlugin.get().getFontManager().getGlyphs()
-                .forEach(glyph -> glyphTextures.add(glyph.getTexture().replace(".png", "")));
+        Set<String> fontTextures = new LinkedHashSet<>();
+        Set<JsonObject> fonts = output.stream().filter(v -> v.getPath().matches("assets/.*/font/.*.json") && v.isJsonObject()).map(VirtualFile::toJsonObject).collect(Collectors.toSet());
+        for (JsonObject font : fonts) {
+            if (font == null || !font.has("providers")) continue;
+            for (JsonElement providerElement : font.getAsJsonArray("providers")) {
+                if (!providerElement.isJsonObject()) continue;
+                JsonObject provider = providerElement.getAsJsonObject();
+                if (provider.has("file")) {
+                    fontTextures.add(provider.get("file").getAsString().replace(".png", ""));
+                }
+            }
+        }
 
         for (Map.Entry<VirtualFile, String> entry : textureSubFolders.entrySet()) {
             VirtualFile virtual = entry.getKey();
             String path = entry.getValue();
 
-            // If a texture is for a glyph, do not add it to atlas, unless an item uses it
+            // If a texture is for a font, do not add it to atlas, unless an item uses it
             // Default example is required/exit_icon.png
-            if (glyphTextures.contains(path) && !itemTextures.contains(path)) continue;
+            if (fontTextures.contains(path) && !itemTextures.contains(path)) continue;
 
             JsonObject atlasEntry = new JsonObject();
             String namespace = virtual.getPath().replaceFirst("assets/", "").split("/")[0];

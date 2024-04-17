@@ -25,7 +25,7 @@ import java.nio.file.Files;
 import java.util.List;
 import java.util.*;
 
-public class CustomArmorsTextures {
+public class ShaderArmorTextures {
 
     static final int DEFAULT_RESOLUTION = 16;
     static final int HEIGHT_RATIO = 2;
@@ -46,11 +46,13 @@ public class CustomArmorsTextures {
         FANCY, LESS_FANCY
     }
 
-    public CustomArmorsTextures() {
-        this(DEFAULT_RESOLUTION);
-    }
+    public ShaderArmorTextures() {
+        int resolution = DEFAULT_RESOLUTION;
+        try {
+            resolution = (int) Settings.CUSTOM_ARMOR_SHADER_RESOLUTION.getValue();
+        } catch (NumberFormatException ignored) {
 
-    public CustomArmorsTextures(int resolution) {
+        }
         this.resolution = resolution;
         try {
             shaderType = ShaderType.valueOf(Settings.CUSTOM_ARMOR_SHADER_TYPE.toString().toUpperCase());
@@ -60,7 +62,6 @@ public class CustomArmorsTextures {
             Logs.logWarning("Defaulting to FANCY");
             shaderType = ShaderType.FANCY;
         }
-        //this.layer1Height = resolution * HEIGHT_RATIO;
     }
 
     public static boolean isSameArmorType(ItemStack firstItem, ItemStack secondItem) {
@@ -78,7 +79,7 @@ public class CustomArmorsTextures {
 
         if (!name.endsWith(".png")) return false;
         if (!name.contains("armor_layer") && !name.contains("leather_layer")) return false;
-        if (!Settings.GENERATE_CUSTOM_ARMOR_TEXTURES.toBool()) return false;
+        if (!Settings.CUSTOM_ARMOR_SHADER_GENERATE_CUSTOM_TEXTURES.toBool()) return false;
 
         BufferedImage img;
         try {
@@ -278,7 +279,7 @@ public class CustomArmorsTextures {
             if (shaderType == ShaderType.FANCY) {
                 setPixel(image.getRaster(), 0, 0, armorColor);
                 if (isAnimated)
-                    setPixel(image.getRaster(), 1, 0, Color.fromRGB(image.getHeight() / (int) Settings.ARMOR_RESOLUTION.getValue(), getAnimatedArmorFramerate(), 1));
+                    setPixel(image.getRaster(), 1, 0, Color.fromRGB(image.getHeight() / (int) Settings.CUSTOM_ARMOR_SHADER_RESOLUTION.getValue(), getAnimatedArmorFramerate(), 1));
             }
 
             if (name.contains("armor_layer_1")) {
@@ -294,7 +295,7 @@ public class CustomArmorsTextures {
             if (!isAnimated && image.getHeight() > getLayerHeight()) {
                 Logs.logError("The height of " + name + " is greater than " + getLayerHeight() + "px.");
                 Logs.logWarning("Since it is not an animated armor-file, this will potentially break other armor sets.");
-                Logs.logWarning("Adjust the " + Settings.ARMOR_RESOLUTION.getPath() + " setting to fix this issue.");
+                Logs.logWarning("Adjust the " + Settings.CUSTOM_ARMOR_SHADER_RESOLUTION.getPath() + " setting to fix this issue.");
                 Logs.logWarning("If it is meant to be an animated armor-file, make sure it ends with _a.png or _a_e.png if emissive");
             }
         }
@@ -356,7 +357,7 @@ public class CustomArmorsTextures {
 
     public int getAnimatedArmorFramerate() {
         try {
-            return Integer.parseInt(Settings.ANIMATED_ARMOR_FRAMERATE.getValue().toString());
+            return Integer.parseInt(Settings.CUSTOM_ARMOR_SHADER_ANIMATED_FRAMERATE.getValue().toString());
         } catch (NumberFormatException e) {
             return 24;
         }
@@ -488,6 +489,7 @@ public class CustomArmorsTextures {
             String itemId = entry.getKey();
             ItemBuilder builder = entry.getValue();
             String armorType = StringUtils.substringBeforeLast(itemId, "_");
+            if (!builder.hasOraxenMeta()) continue;
             List<String> layerList = builder.getOraxenMeta().getLayers();
 
             boolean isArmor = builder.build().getType().toString().contains("LEATHER_");
@@ -585,9 +587,9 @@ public class CustomArmorsTextures {
 
     public static void generateArmorShaderFiles() {
         if (shaderType == ShaderType.LESS_FANCY) {
-            CustomArmorsTextures.LessFancyArmorShaders.generateArmorShaderFiles();
+            ShaderArmorTextures.LessFancyArmorShaders.generateArmorShaderFiles();
         } else if (shaderType == ShaderType.FANCY) {
-            CustomArmorsTextures.FancyArmorShaders.generateArmorShaderFiles();
+            ShaderArmorTextures.FancyArmorShaders.generateArmorShaderFiles();
         }
     }
 
@@ -645,7 +647,7 @@ public class CustomArmorsTextures {
                          texCoord1 = UV1;
                          normal = ProjMat * ModelViewMat * vec4(Normal, 0.0);
                      }
-                    """;
+                    """.trim();
         }
 
         private static String getShaderFsh() {
@@ -790,7 +792,7 @@ public class CustomArmorsTextures {
                      
                          fragColor = linear_fog(color, vertexDistance, FogStart, FogEnd, FogColor);
                      }
-                    """.replace(SHADER_PARAMETER_PLACEHOLDER, String.valueOf((int) Settings.ARMOR_RESOLUTION.getValue()));
+                    """.replace(SHADER_PARAMETER_PLACEHOLDER, String.valueOf((int) Settings.CUSTOM_ARMOR_SHADER_RESOLUTION.getValue())).trim();
         }
 
         private static String getShaderJson() {
@@ -827,7 +829,7 @@ public class CustomArmorsTextures {
                              { "name": "GameTime", "type": "float", "count": 1, "values": [ 1.0 ] }
                          ]
                      }
-                    """;
+                    """.trim();
         }
 
         private static String getLicense() {
@@ -836,7 +838,7 @@ public class CustomArmorsTextures {
                                     
                     This allowed to commercially use with reference to original author.
                     Original license: https://github.com/Ancientkingg/fancyPants/blob/master/README.md
-                    """;
+                    """.trim();
         }
 
     }
@@ -887,7 +889,7 @@ public class CustomArmorsTextures {
                              { "name": "FogColor", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 0.0 ] },
                              { "name": "GameTime", "type": "float", "count": 1, "values": [ 1.0 ] }
                          ]
-                     }""";
+                     }""".trim();
         }
 
         public static String getOutlineJson() {
@@ -913,7 +915,7 @@ public class CustomArmorsTextures {
                             { "name": "ProjMat", "type": "matrix4x4", "count": 16, "values": [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 ] },
                             { "name": "ColorModulator", "type": "float", "count": 4, "values": [ 1.0, 1.0, 1.0, 1.0 ] }
                         ]
-                    }""";
+                    }""".trim();
         }
 
         public static String getArmorVsh() {
@@ -982,7 +984,7 @@ public class CustomArmorsTextures {
                                 tintColor = vec4(1);
                             }
                         }
-                    }""";
+                    }""".trim();
         }
 
         public static String getArmorFsh() {
@@ -1015,7 +1017,7 @@ public class CustomArmorsTextures {
                         color.rgb = mix(overlayColor.rgb, color.rgb, overlayColor.a);
                         color *= vertexColor * lightColor; //shading
                         fragColor = linear_fog(color, vertexDistance, FogStart, FogEnd, FogColor);
-                    }""";
+                    }""".trim();
         }
 
         public static String getGlowingVsh() {
@@ -1045,7 +1047,7 @@ public class CustomArmorsTextures {
                         if (size.y >= 2*size.x && size.x < 256) {
                             uv.y /= 2.*size.y/size.x;
                         }
-                    }""";
+                    }""".trim();
         }
 
         public static String getGlowingFsh() {
@@ -1065,7 +1067,7 @@ public class CustomArmorsTextures {
                         vec4 color = texture(Sampler0, uv);
                         if (color.a == 0.0) discard;
                         fragColor = vec4(ColorModulator.rgb * vertexColor.rgb, ColorModulator.a);
-                    }""";
+                    }""".trim();
         }
 
         public static String getFogGlsl() {
@@ -1097,7 +1099,7 @@ public class CustomArmorsTextures {
                             float distY = length((modelViewMat * vec4(0.0, pos.y, 0.0, 1.0)).xyz);
                             return max(distXZ, distY);
                         }
-                    }""";
+                    }""".trim();
         }
     }
 

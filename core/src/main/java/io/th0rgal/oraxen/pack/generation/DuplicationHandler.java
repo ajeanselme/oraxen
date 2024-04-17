@@ -1,9 +1,6 @@
 package io.th0rgal.oraxen.pack.generation;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.google.gson.*;
 import io.th0rgal.oraxen.OraxenPlugin;
 import io.th0rgal.oraxen.config.Settings;
 import io.th0rgal.oraxen.utils.OraxenYaml;
@@ -13,6 +10,7 @@ import io.th0rgal.oraxen.utils.logs.Logs;
 import org.apache.commons.io.FileUtils;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -184,22 +182,19 @@ public class DuplicationHandler {
         for (VirtualFile font : duplicates) {
             JsonElement fontelement = font.toJsonElement();
 
-            if (!fontelement.isJsonObject()) {
-                Logs.logError("Not a json object");
-                continue;
-            }
+            if (fontelement == null || !fontelement.isJsonObject()) continue;
 
             JsonArray providers = fontelement.getAsJsonObject().getAsJsonArray("providers");
             List<String> newProviderChars = getNewProviderCharSet(newProviders);
-            for (JsonElement providerElement : providers) {
+            if (providers != null) for (JsonElement providerElement : providers) {
                 if (!providerElement.isJsonObject()) continue;
+                JsonObject provider = providerElement.getAsJsonObject();
                 if (newProviders.contains(providerElement)) continue;
-                if (!providerElement.getAsJsonObject().has("chars")) continue;
-                String chars = providerElement.getAsJsonObject().getAsJsonArray("chars").toString();
-                if (!newProviderChars.contains(chars))
-                    newProviders.add(providerElement);
-                else
-                    Logs.logWarning("Tried adding " + chars + " but it was already defined in this font");
+                if (provider.has("chars")) {
+                    String chars = provider.getAsJsonArray("chars").toString();
+                    if (!newProviderChars.contains(chars)) newProviders.add(provider);
+                    else Logs.logWarning("Tried adding " + chars + " but it was already defined in this font");
+                } else newProviders.add(provider);
             }
         }
         return newProviders;
@@ -265,7 +260,7 @@ public class DuplicationHandler {
             Logs.logWarning("You are importing another copy of a shader file used to hide scoreboard numbers");
             Logs.logWarning("Either disable <#22b14c>" + Settings.HIDE_SCOREBOARD_NUMBERS.getPath() + "</#22b14c> in settings.yml or delete this file");
             return false;
-        } else if (name.startsWith("assets/minecraft/shaders/core/rendertype_armor_cutout_no_cull") && Settings.GENERATE_ARMOR_SHADER_FILES.toBool()) {
+        } else if (name.startsWith("assets/minecraft/shaders/core/rendertype_armor_cutout_no_cull") && Settings.CUSTOM_ARMOR_SHADER_GENERATE_FILES.toBool()) {
             Logs.logWarning("You are trying to import a shader file used for custom armor.");
             Logs.logWarning("This shader file is already in your pack. Deleting...");
             return true;
@@ -276,7 +271,7 @@ public class DuplicationHandler {
         } else if (name.startsWith("assets/minecraft/textures/models/armor/leather_layer")) {
             Logs.logWarning("Failed to migrate duplicate file-entry, file is a combined custom armor texture");
             Logs.logWarning("You should not import already combined armor layer files.");
-            Logs.logWarning("If you want to handle these files manually, disable <#22b14c>" + Settings.GENERATE_CUSTOM_ARMOR_TEXTURES.getPath() + "</#22b14c> in settings.yml");
+            Logs.logWarning("If you want to handle these files manually, disable <#22b14c>" + Settings.CUSTOM_ARMOR_SHADER_GENERATE_CUSTOM_TEXTURES.getPath() + "</#22b14c> in settings.yml");
             Logs.logWarning("Please refer to https://docs.oraxen.com/configuration/custom-armors for more information. Deleting...");
             return true;
         } else if (name.startsWith("assets/minecraft/textures")) {
@@ -327,28 +322,38 @@ public class DuplicationHandler {
             return false;
         }
 
-        JsonObject json = JsonParser.parseString(fileContent).getAsJsonObject();
-        JsonArray overrides = json.getAsJsonArray("overrides");
-        //Map<Integer, Map<Integer, String>> pullingModels = new HashMap<>();
+        JsonObject json;
+        List<JsonObject> overrides;
+
+        try {
+            json = JsonParser.parseString(fileContent).getAsJsonObject();
+            overrides = json.getAsJsonArray("overrides").asList().stream().map(JsonElement::getAsJsonObject).toList();
+        } catch (JsonParseException | NullPointerException e) {
+            Logs.logWarning("Failed to migrate duplicate file-entry, could not parse json");
+            if (Settings.DEBUG.toBool()) e.printStackTrace();
+            return false;
+        }
+
         Map<Integer, List<String>> pullingModels = new HashMap<>();
         Map<Integer, String> chargedModels = new HashMap<>();
         Map<Integer, String> blockingModels = new HashMap<>();
         Map<Integer, String> castModels = new HashMap<>();
         Map<Integer, List<String>> damagedModels = new HashMap<>();
         List<JsonElement> overridesToRemove = new ArrayList<>();
-        if (overrides != null) {
+
+        if (!overrides.isEmpty()) {
             handleBowPulling(overrides, overridesToRemove, pullingModels);
             handleCrossbowPulling(overrides, overridesToRemove, chargedModels);
             handleShieldBlocking(overrides, overridesToRemove, blockingModels);
             handleFishingRodCast(overrides, overridesToRemove, castModels);
             handleDamaged(overrides, overridesToRemove, damagedModels);
 
-            for (JsonElement element : overridesToRemove) overrides.remove(element);
+            overrides.removeIf(overridesToRemove::contains);
 
             for (JsonElement element : overrides) {
                 JsonObject predicate = element.getAsJsonObject().get("predicate").getAsJsonObject();
                 String modelPath = element.getAsJsonObject().get("model").getAsString().replace("\\", "/");
-                String id = "migrated_" + Utils.removeParentDirs(modelPath);
+                String id = "migrated_" + modelPath.replaceAll("[^a-zA-Z0-9]+","_");
                 // Assume if no cmd is in that it is meant to replace the default model
                 int cmd = predicate.has("custom_model_data") ? predicate.get("custom_model_data").getAsInt() : 0;
 
@@ -378,15 +383,15 @@ public class DuplicationHandler {
         return true;
     }
 
-    private static void handleBowPulling(JsonArray overrides, List<JsonElement> overridesToRemove, Map<Integer, List<String>> pullingModels) {
+    private static void handleBowPulling(@NotNull List<JsonObject> overrides, List<JsonElement> overridesToRemove, Map<Integer, List<String>> pullingModels) {
         handleExtraListPredicates(overrides, overridesToRemove, pullingModels, "pulling");
     }
-    private static void handleDamaged(JsonArray overrides, List<JsonElement> overridesToRemove, Map<Integer, List<String>> damagedModels) {
+    private static void handleDamaged(@NotNull List<JsonObject> overrides, List<JsonElement> overridesToRemove, Map<Integer, List<String>> damagedModels) {
         handleExtraListPredicates(overrides, overridesToRemove, damagedModels, "damaged");
     }
 
-    private static void handleExtraListPredicates(JsonArray overrides, List<JsonElement> overridesToRemove, Map<Integer, List<String>> predicateModels, String predicate) {
-        for (JsonObject object : overrides.asList().stream().filter(JsonElement::isJsonObject).map(JsonElement::getAsJsonObject).toList()) {
+    private static void handleExtraListPredicates(@NotNull List<JsonObject> overrides, List<JsonElement> overridesToRemove, Map<Integer, List<String>> predicateModels, String predicate) {
+        for (JsonObject object : overrides) {
             if (object.get("predicate") == null || !object.get("predicate").isJsonObject()) continue;
             JsonObject predicateObject = object.get("predicate").getAsJsonObject();
             if (predicateObject == null || !predicateObject.has(predicate)) continue;
@@ -397,18 +402,18 @@ public class DuplicationHandler {
         }
     }
 
-    private static void handleCrossbowPulling(JsonArray overrides, List<JsonElement> overridesToRemove, Map<Integer, String> chargedModels) {
+    private static void handleCrossbowPulling(@NotNull List<JsonObject> overrides, List<JsonElement> overridesToRemove, Map<Integer, String> chargedModels) {
         handleExtraPredicates(overrides, overridesToRemove, chargedModels, "charged");
     }
-    private static void handleShieldBlocking(JsonArray overrides, List<JsonElement> overridesToRemove, Map<Integer, String> blockingModels) {
+    private static void handleShieldBlocking(@NotNull List<JsonObject> overrides, List<JsonElement> overridesToRemove, Map<Integer, String> blockingModels) {
         handleExtraPredicates(overrides, overridesToRemove, blockingModels, "blocking");
     }
-    private static void handleFishingRodCast(JsonArray overrides, List<JsonElement> overridesToRemove, Map<Integer, String> castModels) {
+    private static void handleFishingRodCast(@NotNull List<JsonObject> overrides, List<JsonElement> overridesToRemove, Map<Integer, String> castModels) {
         handleExtraPredicates(overrides, overridesToRemove, castModels, "cast");
     }
 
-    private static void handleExtraPredicates(JsonArray overrides, List<JsonElement> overridesToRemove, Map<Integer, String> predicateModels, String predicate) {
-        for (JsonObject object : overrides.asList().stream().filter(JsonElement::isJsonObject).map(JsonElement::getAsJsonObject).toList()) {
+    private static void handleExtraPredicates(@NotNull List<JsonObject> overrides, List<JsonElement> overridesToRemove, Map<Integer, String> predicateModels, String predicate) {
+        for (JsonObject object : overrides) {
             if (object.get("predicate") == null || !object.get("predicate").isJsonObject()) continue;
             JsonObject predicateObject = object.get("predicate").getAsJsonObject();
             if (predicateObject == null || !predicateObject.has(predicate)) continue;

@@ -1,11 +1,14 @@
 package io.th0rgal.oraxen.utils;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.th0rgal.oraxen.utils.logs.Logs;
 import org.apache.commons.io.IOUtils;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
@@ -16,8 +19,11 @@ public class VirtualFile implements Comparable<VirtualFile> {
     private InputStream inputStream;
 
     public VirtualFile(String parentFolder, String name, InputStream inputStream) {
-        this.parentFolder = OS.getOs().getName().startsWith("Windows")
+        parentFolder = OS.getOs().getName().startsWith("Windows")
                 ? parentFolder.replace("\\", "/")
+                : parentFolder;
+        this.parentFolder = parentFolder.endsWith("/")
+                ? parentFolder.substring(0, parentFolder.length() - 1)
                 : parentFolder;
         this.name = name;
         this.inputStream = inputStream;
@@ -50,16 +56,30 @@ public class VirtualFile implements Comparable<VirtualFile> {
         return other.getPath().compareTo(getPath());
     }
 
+    @Nullable
     public JsonElement toJsonElement() {
         InputStream fontInput = inputStream;
         String fontContent;
         try {
             fontContent = IOUtils.toString(fontInput, StandardCharsets.UTF_8);
+            inputStream.close();
+            inputStream = new ByteArrayInputStream(fontContent.getBytes(StandardCharsets.UTF_8));
+            return JsonParser.parseString(fontContent);
         } catch (Exception e) {
             Logs.logError(Utils.removeParentDirs(getPath()) + " was empty");
             return null;
         }
-        return JsonParser.parseString(fontContent);
+    }
+
+    @Nullable
+    public JsonObject toJsonObject() {
+        JsonElement element = toJsonElement();
+        return element != null && element.isJsonObject() ? element.getAsJsonObject() : null;
+    }
+
+    public boolean isJsonObject() {
+        JsonElement element = toJsonElement();
+        return element != null && element.isJsonObject();
     }
 
 }

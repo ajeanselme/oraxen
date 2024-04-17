@@ -7,13 +7,11 @@ import io.netty.channel.*;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.MessageToByteEncoder;
 import io.th0rgal.oraxen.OraxenPlugin;
-import io.th0rgal.oraxen.config.Settings;
 import io.th0rgal.oraxen.nms.GlyphHandlers;
-import io.th0rgal.oraxen.nms.NMSHandlers;
 import io.th0rgal.oraxen.utils.AdventureUtils;
+import io.th0rgal.oraxen.utils.BlockHelpers;
 import net.kyori.adventure.text.Component;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
@@ -36,9 +34,10 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
+import org.bukkit.SoundCategory;
+import org.bukkit.SoundGroup;
+import org.bukkit.World;
 import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.craftbukkit.v1_18_R1.entity.CraftPlayer;
 import org.bukkit.craftbukkit.v1_18_R1.inventory.CraftItemStack;
@@ -62,6 +61,16 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
     private final Map<Channel, ChannelHandler> decoder = Collections.synchronizedMap(new WeakHashMap<>());
 
     @Override
+    public boolean noteblockUpdatesDisabled() {
+        return false;
+    }
+
+    @Override
+    public boolean tripwireUpdatesDisabled() {
+        return false;
+    }
+
+    @Override
     public ItemStack copyItemNBTTags(@NotNull ItemStack oldItem, @NotNull ItemStack newItem) {
         CompoundTag oldTag = CraftItemStack.asNMSCopy(oldItem).getOrCreateTag();
         net.minecraft.world.item.ItemStack newNmsItem = CraftItemStack.asNMSCopy(newItem);
@@ -81,7 +90,8 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
         BlockPlaceContext placeContext = new BlockPlaceContext(new UseOnContext(serverPlayer, hand, hitResult));
 
         if (!(nmsStack.getItem() instanceof BlockItem blockItem)) {
-            serverPlayer.gameMode.useItem(serverPlayer, serverPlayer.level, nmsStack, hand);
+            nmsStack.getItem().useOn(new UseOnContext(serverPlayer, hand, hitResult));
+            if (!player.isSneaking()) serverPlayer.gameMode.useItem(serverPlayer, serverPlayer.level, nmsStack, hand);
             return null;
         }
 
@@ -94,7 +104,20 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
         InteractionResult result = blockItem.place(placeContext);
         if (result == InteractionResult.FAIL) return null;
         if (placeContext instanceof DirectionalPlaceContext && player.getGameMode() != org.bukkit.GameMode.CREATIVE) itemStack.setAmount(itemStack.getAmount() - 1);
-        return player.getWorld().getBlockAt(pos.getX(), pos.getY(), pos.getZ()).getBlockData();
+        World world = player.getWorld();
+
+        if(!player.isSneaking()) {
+            BlockPos clickPos = placeContext.getClickedPos();
+            Block block = world.getBlockAt(clickPos.getX(), clickPos.getY(), clickPos.getZ());
+            SoundGroup sound = block.getBlockData().getSoundGroup();
+
+            world.playSound(
+                    BlockHelpers.toCenterBlockLocation(block.getLocation()), sound.getPlaceSound(),
+                    SoundCategory.BLOCKS, (sound.getVolume() + 1.0F) / 2.0F, sound.getPitch() * 0.8F
+            );
+        }
+
+        return world.getBlockAt(pos.getX(), pos.getY(), pos.getZ()).getBlockData();
     }
 
     @Override
@@ -120,7 +143,7 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
 
     @Override
     public void setupNmsGlyphs() {
-        if (!Settings.NMS_GLYPHS.toBool()) return;
+        if (GlyphHandlers.isNms()) return;
         List<Connection> networkManagers = MinecraftServer.getServer().getConnection().getConnections();
         List<ChannelFuture> channelFutures;
 
@@ -209,7 +232,7 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
 
     @Override
     public void inject(Player player) {
-        if (player == null || !Settings.NMS_GLYPHS.toBool()) return;
+        if (player == null || !GlyphHandlers.isNms()) return;
         Channel channel = ((CraftPlayer) player).getHandle().connection.connection.channel;
 
         inject(channel);
@@ -226,7 +249,7 @@ public class NMSHandler implements io.th0rgal.oraxen.nms.NMSHandler {
 
     @Override
     public void uninject(Player player) {
-        if (player == null || !Settings.NMS_GLYPHS.toBool()) return;
+        if (player == null || !GlyphHandlers.isNms()) return;
         Channel channel = ((CraftPlayer) player).getHandle().connection.connection.channel;
 
         uninject(channel);

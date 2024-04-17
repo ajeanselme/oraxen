@@ -117,7 +117,7 @@ public class OraxenMeta {
         this.generatedModelPath = section.getString("generated_model_path", "");
         this.parentModel = section.getString("parent_model", "item/generated");
 
-        if (generate_model && !modelName.matches("^[a-z0-9-_]+$")) {
+        if (generate_model && !modelName.matches("^[a-z0-9-_/]+$")) {
             Logs.logWarning("Item " + section.getParent().getName() + " is set to generate a model, but ItemID does not adhere to [a-z0-9-_]!");
             Logs.logWarning("This will generate a malformed model!");
         }
@@ -143,16 +143,18 @@ public class OraxenMeta {
         return hasPackInfos;
     }
 
-    public void setCustomModelData(int customModelData) {
+    public OraxenMeta setCustomModelData(int customModelData) {
         this.customModelData = customModelData;
+        return this;
     }
 
     public int getCustomModelData() {
         return customModelData;
     }
 
-    public void setModelName(String modelName) {
+    public OraxenMeta setModelName(String modelName) {
         this.modelName = modelName;
+        return this;
     }
 
     public OraxenMeta setNoUpdate(boolean noUpdate) {

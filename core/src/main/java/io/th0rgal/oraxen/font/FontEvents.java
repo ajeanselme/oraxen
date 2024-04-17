@@ -9,23 +9,18 @@ import io.th0rgal.oraxen.config.Message;
 import io.th0rgal.oraxen.config.Settings;
 import io.th0rgal.oraxen.utils.AdventureUtils;
 import io.th0rgal.oraxen.utils.ItemUtils;
-import io.th0rgal.oraxen.utils.Utils;
 import io.th0rgal.oraxen.utils.VersionUtil;
 import io.th0rgal.oraxen.utils.logs.Logs;
 import net.kyori.adventure.inventory.Book;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.TextReplacementConfig;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Event;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
+import org.bukkit.event.*;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -40,20 +35,65 @@ import java.util.Arrays;
 import java.util.Map;
 
 import static io.th0rgal.oraxen.items.ItemBuilder.ORIGINAL_NAME_KEY;
-import static io.th0rgal.oraxen.utils.AdventureUtils.MINI_MESSAGE;
-import static io.th0rgal.oraxen.utils.AdventureUtils.MINI_MESSAGE_EMPTY;
+import static io.th0rgal.oraxen.utils.AdventureUtils.*;
 
 public class FontEvents implements Listener {
 
     private final FontManager manager;
+    @Nullable PaperChatHandler paperChatHandler;
+    @Nullable LegacyPaperChatHandler legacyPaperChatHandler;
+    @Nullable SpigotChatHandler spigotChatHandler;
+
+    enum ChatHandler {
+        LEGACY,
+        MODERN;
+
+        public static boolean isLegacy() {
+            return get() == LEGACY;
+        }
+
+        public static boolean isModern() {
+            return get() == MODERN;
+        }
+
+        public static ChatHandler get() {
+            try {
+                return valueOf(Settings.CHAT_HANDLER.toString());
+            } catch (IllegalArgumentException e) {
+                ChatHandler chatHandler = VersionUtil.isPaperServer() ? MODERN : LEGACY;
+                Logs.logError("Invalid chat-handler defined in settings.yml, defaulting to " + chatHandler, true);
+                Logs.logError("Valid options are: " + Arrays.toString(values()), true);
+                return chatHandler;
+            }
+        }
+    }
 
     public FontEvents(FontManager manager) {
         this.manager = manager;
         if (VersionUtil.isPaperServer()) {
-            if (VersionUtil.isSupportedVersionOrNewer("1.19.1"))
-                Bukkit.getPluginManager().registerEvents(new PaperChatHandler(), OraxenPlugin.get());
-            Bukkit.getPluginManager().registerEvents(new LegacyPaperChatHandler(), OraxenPlugin.get());
-        } else Bukkit.getPluginManager().registerEvents(new SpigotChatHandler(), OraxenPlugin.get());
+            if (VersionUtil.atOrAbove("1.19.1"))
+                paperChatHandler = new PaperChatHandler();
+            legacyPaperChatHandler = new LegacyPaperChatHandler();
+        }
+        spigotChatHandler = new SpigotChatHandler();
+    }
+
+    public void registerChatHandlers() {
+        if (paperChatHandler != null)
+            Bukkit.getPluginManager().registerEvents(paperChatHandler, OraxenPlugin.get());
+        if (legacyPaperChatHandler != null)
+            Bukkit.getPluginManager().registerEvents(legacyPaperChatHandler, OraxenPlugin.get());
+        if (spigotChatHandler != null)
+            Bukkit.getPluginManager().registerEvents(spigotChatHandler, OraxenPlugin.get());
+    }
+
+    public void unregisterChatHandlers() {
+        if (paperChatHandler != null)
+            HandlerList.unregisterAll(paperChatHandler);
+        if (legacyPaperChatHandler != null)
+            HandlerList.unregisterAll(legacyPaperChatHandler);
+        if (spigotChatHandler != null)
+            HandlerList.unregisterAll(spigotChatHandler);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -205,7 +245,7 @@ public class FontEvents implements Listener {
     public class SpigotChatHandler implements Listener {
         @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
         public void onPlayerChat(AsyncPlayerChatEvent event) {
-            if (!Settings.FORMAT_CHAT.toBool() || manager.useNmsGlyphs()) return;
+            if (!Settings.FORMAT_CHAT.toBool() || !ChatHandler.isLegacy() || manager.useNmsGlyphs()) return;
 
             String format = format(event.getFormat(), null);
             String message = format(event.getMessage(), event.getPlayer());
@@ -224,9 +264,9 @@ public class FontEvents implements Listener {
          * @return The formatted string, or null if the player doesn't have permission for a glyph
          */
         private String format(String string, @Nullable Player player) {
-            string = AdventureUtils.parseLegacyThroughMiniMessage(string, player);
+            TextComponent component = (TextComponent) AdventureUtils.MINI_MESSAGE_PLAYER(player).deserialize(string);
             if (player != null) for (Character character : manager.getReverseMap().keySet()) {
-                if (!string.contains(String.valueOf(character))) continue;
+                if (!component.content().contains(String.valueOf(character))) continue;
                 Glyph glyph = manager.getGlyphFromName(manager.getReverseMap().get(character));
                 if (!glyph.hasPermission(player)) {
                     Message.NO_PERMISSION.send(player, AdventureUtils.tagResolver("permission", glyph.getPermission()));
@@ -234,16 +274,17 @@ public class FontEvents implements Listener {
                 }
             }
 
-
             for (Map.Entry<String, Glyph> entry : manager.getGlyphByPlaceholderMap().entrySet()) {
-                String unicode = ChatColor.WHITE + String.valueOf(entry.getValue().getCharacter());
-                if (player == null || entry.getValue().hasPermission(player))
-                    string = (manager.permsChatcolor == null)
-                            ? string.replace(entry.getKey(), unicode)
-                            : string.replace(entry.getKey(), unicode + PapiAliases.setPlaceholders(player, manager.permsChatcolor));
+                String placeholder = entry.getKey();
+                Glyph glyph = entry.getValue();
+
+                if (player == null || glyph.hasPermission(player)) {
+                    component = (TextComponent) component.replaceText(TextReplacementConfig.builder()
+                            .matchLiteral(placeholder).replacement(glyph.getGlyphComponent()).build());
+                }
             }
 
-            return string;
+            return LEGACY_SERIALIZER.serialize(component);
         }
     }
 
@@ -253,7 +294,7 @@ public class FontEvents implements Listener {
 
         @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
         public void onPlayerChat(AsyncChatDecorateEvent event) {
-            if (!Settings.FORMAT_CHAT.toBool() || manager.useNmsGlyphs()) return;
+            if (!Settings.FORMAT_CHAT.toBool() || !ChatHandler.isModern() || manager.useNmsGlyphs()) return;
             event.result(format(event.result(), event.player()));
         }
 
@@ -263,9 +304,9 @@ public class FontEvents implements Listener {
 
         @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
         public void onPlayerChat(AsyncChatEvent event) {
-            if (!Settings.FORMAT_CHAT.toBool() || manager.useNmsGlyphs()) return;
+            if (!Settings.FORMAT_CHAT.toBool() || !ChatHandler.isModern() || manager.useNmsGlyphs()) return;
             // AsyncChatDecorateEvent has formatted the component if server is 1.19.1+
-            Component message = VersionUtil.isSupportedVersionOrNewer("1.19.1") ? event.message() : format(event.message(), event.getPlayer());
+            Component message = VersionUtil.atOrAbove("1.19.1") ? event.message() : format(event.message(), event.getPlayer());
             message = message != null ? message : Component.empty();
             if (!message.equals(Component.empty())) return;
 

@@ -2,7 +2,6 @@ package io.th0rgal.oraxen.font;
 
 
 import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.th0rgal.oraxen.OraxenPlugin;
 import io.th0rgal.oraxen.config.Settings;
@@ -10,14 +9,17 @@ import io.th0rgal.oraxen.utils.AdventureUtils;
 import io.th0rgal.oraxen.utils.logs.Logs;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.TextReplacementConfig;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.event.HoverEventSource;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.minimessage.tag.Tag;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.apache.commons.lang3.StringUtils;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Nullable;
 
-import javax.annotation.Nullable;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -62,7 +64,8 @@ public class Glyph {
         permission = chatSection != null ? chatSection.getString("permission", "") : "";
         tabcomplete = chatSection != null && chatSection.getBoolean("tabcomplete", false);
 
-        String baseRegex = "((<(glyph|g):" + name + ")(:(c|colorable))*>" + (placeholders.length > 0 ? "|" + String.join("|", placeholders) : "") + ")";
+        String placeholderRegex = String.join("|", Arrays.stream(placeholders).map(Pattern::quote).toArray(String[]::new));
+        String baseRegex = "((<(glyph|g):" + name + ")(:(c|colorable))*>" + (placeholders.length > 0 ?  "|" + placeholderRegex : "") + ")";
         this.baseRegex = Pattern.compile("(?<!\\\\)" + baseRegex);
         escapedRegex = Pattern.compile("\\\\" + baseRegex);
 
@@ -250,6 +253,15 @@ public class Glyph {
     }
 
     public Component getGlyphComponent() {
-        return Component.textOfChildren(Component.text(getCharacter(), NamedTextColor.WHITE).font(font));
+        return Component.textOfChildren(Component.text(getCharacter(), NamedTextColor.WHITE).font(font).hoverEvent(getGlyphHoverText()));
+    }
+
+    @Nullable
+    public HoverEventSource getGlyphHoverText() {
+        String hoverText = Settings.GLYPH_HOVER_TEXT.toString();
+        TagResolver hoverResolver = TagResolver.builder().tag("glyph_placeholder", Tag.selfClosingInserting(Component.text(Arrays.stream(getPlaceholders()).findFirst().orElse("")))).build();
+        Component hoverComponent = AdventureUtils.MINI_MESSAGE.deserialize(hoverText, hoverResolver);
+        if (hoverText.isEmpty() || hoverComponent == Component.empty()) return null;
+        return HoverEvent.showText(hoverComponent);
     }
 }

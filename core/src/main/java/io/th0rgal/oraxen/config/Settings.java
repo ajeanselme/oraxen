@@ -1,7 +1,9 @@
 package io.th0rgal.oraxen.config;
 
 import io.th0rgal.oraxen.OraxenPlugin;
+import io.th0rgal.oraxen.utils.AdventureUtils;
 import io.th0rgal.oraxen.utils.logs.Logs;
+import net.kyori.adventure.text.Component;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -13,11 +15,8 @@ public enum Settings {
     PLUGIN_LANGUAGE("Plugin.language"),
     KEEP_UP_TO_DATE("Plugin.keep_this_up_to_date"),
     REPAIR_COMMAND_ORAXEN_DURABILITY("Plugin.commands.repair.oraxen_durability_only"),
-    SHOW_PERMISSION_EMOJIS("Plugin.commands.emoji_list.only_show_emojis_with_permission"),
     GENERATE_DEFAULT_ASSETS("Plugin.generation.default_assets"),
     GENERATE_DEFAULT_CONFIGS("Plugin.generation.default_configs"),
-    WORLDEDIT_NOTEBLOCKS("Plugin.worldedit.noteblock_mechanic"),
-    WORLDEDIT_STRINGBLOCKS("Plugin.worldedit.stringblock_mechanic"),
     FORMAT_INVENTORY_TITLES("Plugin.formatting.inventory_titles"),
     FORMAT_TITLES("Plugin.formatting.titles"),
     FORMAT_SUBTITLES("Plugin.formatting.subtitles"),
@@ -26,7 +25,21 @@ public enum Settings {
     FORMAT_SIGNS("Plugin.formatting.signs"),
     FORMAT_CHAT("Plugin.formatting.chat"),
     FORMAT_BOOKS("Plugin.formatting.books"),
-    NMS_GLYPHS("Plugin.experimental.nms.glyphs"),
+
+    // WorldEdit
+    WORLDEDIT_NOTEBLOCKS("WorldEdit.noteblock_mechanic"),
+    WORLDEDIT_STRINGBLOCKS("WorldEdit.stringblock_mechanic"),
+    WORLDEDIT_FURNITURE("WorldEdit.furniture_mechanic"),
+
+    // Glyphs
+    GLYPH_HANDLER("Glyphs.glyph_handler"),
+    SHOW_PERMISSION_EMOJIS("Glyphs.emoji_list_permission_only"),
+    UNICODE_COMPLETIONS("Glyphs.unicode_completions"),
+    GLYPH_HOVER_TEXT("Glyphs.chat_hover_text"),
+
+
+    // Chat
+    CHAT_HANDLER("Chat.chat_handler"),
 
     // Config Tools
     CONFIGS_VERSION("configs_version"),
@@ -36,12 +49,24 @@ public enum Settings {
     SKIPPED_MODEL_DATA_NUMBERS("ConfigsTools.skipped_model_data_numbers"),
     ERROR_ITEM("ConfigsTools.error_item"),
 
+    // Custom Armor
+    CUSTOM_ARMOR_TYPE("CustomArmor.type"),
     DISABLE_LEATHER_REPAIR_CUSTOM("CustomArmor.disable_leather_repair"),
-    CUSTOM_ARMOR_SHADER_TYPE("CustomArmor.shader_type"),
+    CUSTOM_ARMOR_TRIMS_MATERIAL("CustomArmor.trims_settings.material_replacement"),
+    CUSTOM_ARMOR_TRIMS_ASSIGN("CustomArmor.trims_settings.auto_assign_settings"),
+    CUSTOM_ARMOR_SHADER_TYPE("CustomArmor.shader_settings.type"),
+    CUSTOM_ARMOR_SHADER_RESOLUTION("CustomArmor.shader_settings.armor_resolution"),
+    CUSTOM_ARMOR_SHADER_ANIMATED_FRAMERATE("CustomArmor.shader_settings.animated_armor_framerate"),
+    CUSTOM_ARMOR_SHADER_GENERATE_FILES("CustomArmor.shader_settings.generate_armor_shader_files"),
+    CUSTOM_ARMOR_SHADER_GENERATE_CUSTOM_TEXTURES("CustomArmor.shader_settings.generate_custom_armor_textures"),
+    CUSTOM_ARMOR_SHADER_GENERATE_SHADER_COMPATIBLE_ARMOR("CustomArmor.shader_settings.generate_shader_compatible_armor"),
+
+
     GESTURES_ENABLED("Gestures.enabled"),
 
     // Custom Blocks
     BLOCK_CORRECTION("CustomBlocks.block_correction"),
+    LEGACY_NOTEBLOCKS("CustomBlocks.use_legacy_noteblocks"),
 
     // ItemUpdater
     UPDATE_ITEMS("ItemUpdater.update_items"),
@@ -59,7 +84,6 @@ public enum Settings {
     //Misc
     RESET_RECIPES("Misc.reset_recipes"),
     ADD_RECIPES_TO_BOOK("Misc.add_recipes_to_book"),
-    UNICODE_COMPLETIONS("Misc.unicode_completions"),
     ARMOR_EQUIP_EVENT_BYPASS("Misc.armor_equip_event_bypass"),
     SHIELD_DISPLAY("Misc.shield_display"),
     BOW_DISPLAY("Misc.bow_display"),
@@ -77,11 +101,6 @@ public enum Settings {
     EXCLUDE_MALFORMED_ATLAS("Pack.generation.atlas.exclude_malformed_from_atlas"),
     ATLAS_GENERATION_TYPE("Pack.generation.atlas.type"),
     GENERATE_MODEL_BASED_ON_TEXTURE_PATH("Pack.generation.auto_generated_models_follow_texture_path"),
-    ARMOR_RESOLUTION("Pack.generation.armor_resolution"),
-    ANIMATED_ARMOR_FRAMERATE("Pack.generation.animated_armor_framerate"),
-    GENERATE_ARMOR_SHADER_FILES("Pack.generation.generate_armor_shader_files"),
-    GENERATE_CUSTOM_ARMOR_TEXTURES("Pack.generation.generate_custom_armor_textures"),
-    AUTOMATICALLY_GENERATE_SHADER_COMPATIBLE_ARMOR("Pack.generation.automatically_generate_shader_compatible_armor"),
     COMPRESSION("Pack.generation.compression"),
     PROTECTION("Pack.generation.protection"),
     COMMENT("Pack.generation.comment"),
@@ -122,7 +141,11 @@ public enum Settings {
     // Inventory
     ORAXEN_INV_LAYOUT("oraxen_inventory.menu_layout"),
     ORAXEN_INV_ROWS("oraxen_inventory.menu_rows"),
-    ORAXEN_INV_TITLE("oraxen_inventory.main_menu_title");
+    ORAXEN_INV_TITLE("oraxen_inventory.main_menu_title"),
+    ORAXEN_INV_TYPE("oraxen_inventory.main_menu_type"),
+    ORAXEN_INV_NEXT_ICON("oraxen_inventory.next_page_icon"),
+    ORAXEN_INV_PREVIOUS_ICON("oraxen_inventory.previous_page_icon"),
+    ORAXEN_INV_EXIT("oraxen_inventory.exit_icon");
 
     private final String path;
 
@@ -151,6 +174,10 @@ public enum Settings {
     @Override
     public String toString() {
         return (String) getValue();
+    }
+
+    public Component toComponent() {
+        return AdventureUtils.MINI_MESSAGE.deserialize(getValue().toString());
     }
 
     public Boolean toBool() {

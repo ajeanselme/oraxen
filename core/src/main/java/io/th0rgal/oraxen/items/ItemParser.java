@@ -1,6 +1,5 @@
 package io.th0rgal.oraxen.items;
 
-import io.th0rgal.oraxen.api.OraxenFurniture;
 import io.th0rgal.oraxen.api.OraxenItems;
 import io.th0rgal.oraxen.compatibilities.provided.ecoitems.WrappedEcoItem;
 import io.th0rgal.oraxen.compatibilities.provided.mmoitems.WrappedMMOItem;
@@ -9,10 +8,10 @@ import io.th0rgal.oraxen.config.Settings;
 import io.th0rgal.oraxen.mechanics.Mechanic;
 import io.th0rgal.oraxen.mechanics.MechanicFactory;
 import io.th0rgal.oraxen.mechanics.MechanicsManager;
-import io.th0rgal.oraxen.mechanics.provided.gameplay.furniture.FurnitureMechanic;
 import io.th0rgal.oraxen.utils.AdventureUtils;
+import io.th0rgal.oraxen.utils.PotionUtils;
 import io.th0rgal.oraxen.utils.Utils;
-import io.th0rgal.oraxen.utils.logs.Logs;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
@@ -87,14 +86,14 @@ public class ItemParser {
         return templateItem != null;
     }
 
-    private String parseComponentDisplayName(String miniString) {
+    public static String parseComponentDisplayName(String miniString) {
         if (miniString.isEmpty()) return miniString;
         Component component = AdventureUtils.MINI_MESSAGE.deserialize(miniString);
         // If it has no formatting, set color to WHITE to prevent Italic
         return AdventureUtils.LEGACY_SERIALIZER.serialize(component.colorIfAbsent(NamedTextColor.WHITE));
     }
 
-    private String parseComponentLore(String miniString) {
+    public static String parseComponentLore(String miniString) {
         Component component = AdventureUtils.MINI_MESSAGE.deserialize(miniString);
         // If it has no formatting, set color to WHITE to prevent Italic
         return AdventureUtils.LEGACY_SERIALIZER.serialize(component);
@@ -116,11 +115,12 @@ public class ItemParser {
         item.setDisplayName(parseComponentDisplayName(section.getString("displayname", "")));
 
         //if (section.contains("type")) item.setType(Material.getMaterial(section.getString("type", "PAPER")));
-        if (section.contains("lore")) item.setLore(section.getStringList("lore").stream().map(this::parseComponentLore).toList());
+        if (section.contains("lore")) item.setLore(section.getStringList("lore").stream().map(ItemParser::parseComponentLore).toList());
         if (section.contains("durability")) item.setDurability((short) section.getInt("durability"));
         if (section.contains("unbreakable")) item.setUnbreakable(section.getBoolean("unbreakable", false));
         if (section.contains("unstackable")) item.setUnstackable(section.getBoolean("unstackable", false));
         if (section.contains("color")) item.setColor(Utils.toColor(section.getString("color", "#FFFFFF")));
+        if (section.contains("trim_pattern")) item.setTrimPattern(Key.key(section.getString("trim_pattern", "")));
 
         parseMiscOptions(item);
         parseVanillaSections(item);
@@ -154,13 +154,13 @@ public class ItemParser {
                     .getList("PotionEffects");
             if (potionEffects == null) return;
             for (Map<String, Object> serializedPotionEffect : potionEffects) {
-                PotionEffectType effect = PotionEffectType.getByName((String) serializedPotionEffect.get("type"));
+                PotionEffectType effect = PotionUtils.getEffectType((String) serializedPotionEffect.getOrDefault("type", ""));
                 if (effect == null) return;
-                int duration = (int) serializedPotionEffect.get("duration");
-                int amplifier = (int) serializedPotionEffect.get("amplifier");
-                boolean ambient = (boolean) serializedPotionEffect.get("ambient");
-                boolean particles = (boolean) serializedPotionEffect.get("particles");
-                boolean icon = (boolean) serializedPotionEffect.get("icon");
+                int duration = (int) serializedPotionEffect.getOrDefault("duration", 60);
+                int amplifier = (int) serializedPotionEffect.getOrDefault("amplifier", 0);
+                boolean ambient = (boolean) serializedPotionEffect.getOrDefault("ambient", true);
+                boolean particles = (boolean) serializedPotionEffect.getOrDefault("particles", true);
+                boolean icon = (boolean) serializedPotionEffect.getOrDefault("icon", true);
                 item.addPotionEffect(new PotionEffect(effect, duration, amplifier, ambient, particles, icon));
             }
         }

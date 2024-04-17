@@ -18,15 +18,13 @@ import io.th0rgal.oraxen.hud.HudManager;
 import io.th0rgal.oraxen.items.ItemUpdater;
 import io.th0rgal.oraxen.mechanics.MechanicsManager;
 import io.th0rgal.oraxen.mechanics.provided.gameplay.furniture.FurnitureFactory;
+import io.th0rgal.oraxen.nms.GlyphHandlers;
 import io.th0rgal.oraxen.nms.NMSHandlers;
 import io.th0rgal.oraxen.pack.generation.ResourcePack;
 import io.th0rgal.oraxen.pack.upload.UploadManager;
 import io.th0rgal.oraxen.recipes.RecipesManager;
 import io.th0rgal.oraxen.sound.SoundManager;
-import io.th0rgal.oraxen.utils.AdventureUtils;
-import io.th0rgal.oraxen.utils.NoticeUtils;
-import io.th0rgal.oraxen.utils.OS;
-import io.th0rgal.oraxen.utils.VersionUtil;
+import io.th0rgal.oraxen.utils.*;
 import io.th0rgal.oraxen.utils.actions.ClickActionManager;
 import io.th0rgal.oraxen.utils.armorequipevent.ArmorEquipEvent;
 import io.th0rgal.oraxen.utils.breaker.BreakerSystem;
@@ -89,10 +87,10 @@ public class OraxenPlugin extends JavaPlugin {
     public void onEnable() {
         CommandAPI.onEnable();
         ProtectionLib.init(this);
-        if (!VersionUtil.isSupportedVersionOrNewer("1.20.3")) PlayerAnimatorImpl.initialize(this);
+        if (!VersionUtil.atOrAbove("1.20.3")) PlayerAnimatorImpl.initialize(this);
         audience = BukkitAudiences.create(this);
         clickActionManager = new ClickActionManager(this);
-        supportsDisplayEntities = VersionUtil.isSupportedVersionOrNewer("1.19.4");
+        supportsDisplayEntities = VersionUtil.atOrAbove("1.19.4");
         reloadConfigs();
 
         if (Settings.KEEP_UP_TO_DATE.toBool())
@@ -108,14 +106,14 @@ public class OraxenPlugin extends JavaPlugin {
         pluginManager.registerEvents(new CustomArmorListener(), this);
         NMSHandlers.setup();
 
-        resourceManager = new ResourcesManager(this);
+
         resourcePack = new ResourcePack();
         MechanicsManager.registerNativeMechanics();
         //CustomBlockData.registerListener(this); //Handle this manually
         hudManager = new HudManager(configsManager);
         fontManager = new FontManager(configsManager);
         soundManager = new SoundManager(configsManager.getSound());
-        if (!VersionUtil.isSupportedVersionOrNewer("1.20.3")) gestureManager = new GestureManager();
+        if (!VersionUtil.atOrAbove("1.20.3")) gestureManager = new GestureManager();
         OraxenItems.loadItems();
         fontManager.registerEvents();
         fontManager.verifyRequired(); // Verify the required glyph is there
@@ -140,6 +138,7 @@ public class OraxenPlugin extends JavaPlugin {
 
     private void postLoading() {
         new Metrics(this, 5371);
+        new LU().l();
         Bukkit.getScheduler().runTask(this, () ->
                 Bukkit.getPluginManager().callEvent(new OraxenItemsLoadedEvent()));
     }
@@ -149,8 +148,7 @@ public class OraxenPlugin extends JavaPlugin {
         unregisterListeners();
         FurnitureFactory.unregisterEvolution();
         for (Player player : Bukkit.getOnlinePlayers())
-            if (NMSHandlers.getHandler() != null && Settings.NMS_GLYPHS.toBool())
-                NMSHandlers.getHandler().uninject(player);
+            if (GlyphHandlers.isNms()) NMSHandlers.getHandler().uninject(player);
 
         CompatibilitiesManager.disableCompatibilities();
         Message.PLUGIN_UNLOADED.log();
@@ -182,6 +180,7 @@ public class OraxenPlugin extends JavaPlugin {
     public void reloadConfigs() {
         configsManager = new ConfigsManager(this);
         configsManager.validatesConfig();
+        resourceManager = new ResourcesManager(this);
     }
 
     public ConfigsManager getConfigsManager() {

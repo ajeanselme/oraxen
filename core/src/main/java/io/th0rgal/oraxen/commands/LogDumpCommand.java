@@ -6,6 +6,8 @@ import gs.mclo.java.Log;
 import gs.mclo.java.MclogsAPI;
 import io.th0rgal.oraxen.OraxenPlugin;
 import io.th0rgal.oraxen.config.Settings;
+import io.th0rgal.oraxen.utils.LU;
+import io.th0rgal.oraxen.utils.VersionUtil;
 import io.th0rgal.oraxen.utils.logs.Logs;
 
 import javax.net.ssl.HttpsURLConnection;
@@ -24,13 +26,14 @@ public class LogDumpCommand {
         return new CommandAPICommand("dump_log")
                 .withPermission("oraxen.command.dumplog")
                 .executes((sender, args) -> {
-                    String packUrl = OraxenPlugin.get().getUploadManager().getHostingProvider().getPackURL();
+                    String packUrl = "http://atlas.oraxen.com:8080/.*";
                     String logfile;
 
                     try {
-                        Logs.logError(OraxenPlugin.get().getDataFolder().getAbsoluteFile().getParentFile().getParentFile().toPath().resolve("logs/latest.log").toString());
                         Path path = OraxenPlugin.get().getDataFolder().getAbsoluteFile().getParentFile().getParentFile().toPath().resolve("logs/latest.log");
-                        logfile = Files.readString(path).replace(packUrl, "[REDACTED]");
+                        logfile = Files.readString(path).replaceAll(packUrl, "[REDACTED]");
+                        logfile += "\n\n" + new LU().hr();
+                        if (VersionUtil.isLeaked()) logfile = logfile + "\n\nThis server is running a leaked version of Oraxen";
                     } catch (Exception e) {
                         Logs.logError("Failed to read latest.log, is it missing?");
                         if (Settings.DEBUG.toBool()) e.printStackTrace();
@@ -41,7 +44,7 @@ public class LogDumpCommand {
                         APIResponse post = MclogsAPI.share(new Log(logfile));
                         Logs.logSuccess("Logfile has been dumped to: " + post.url);
                     } catch (IOException e) {
-                        Logs.logWarning("Failed to upload logfile to mclo.gs, attempting to using pastebin");
+                        Logs.logWarning("Failed to upload logfile to mclo.gs, attempting to using pastebin - s");
                         if (Settings.DEBUG.toBool()) e.printStackTrace();
                         try {
                             Logs.logSuccess("Logfile has been dumped to: " + postToPasteBin(logfile));
