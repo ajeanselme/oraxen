@@ -15,6 +15,7 @@ import org.apache.http.util.EntityUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.UUID;
 
 public class CustomProvider implements HostingProvider {
 
@@ -94,6 +95,11 @@ public class CustomProvider implements HostingProvider {
     @Override
     public String getOriginalSHA1() {
         return sha1;
+    }
+
+    @Override
+    public UUID getPackUUID() {
+        return null;
     }
 
 }
