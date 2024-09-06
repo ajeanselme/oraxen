@@ -6,6 +6,7 @@ import io.th0rgal.oraxen.config.Settings;
 import io.th0rgal.oraxen.mechanics.provided.misc.misc.MiscMechanic;
 import io.th0rgal.oraxen.mechanics.provided.misc.misc.MiscMechanicFactory;
 import io.th0rgal.oraxen.recipes.CustomRecipe;
+import io.th0rgal.oraxen.utils.InventoryUtils;
 import io.th0rgal.oraxen.utils.VersionUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
@@ -73,7 +74,9 @@ public class RecipesEventsManager implements Listener {
         if (!containsOraxenItem || recipe == null) return;
 
         if (Arrays.stream(event.getInventory().getMatrix()).anyMatch(item -> {
-            MiscMechanic mechanic = MiscMechanicFactory.get().getMechanic(item);
+            MiscMechanicFactory factory = MiscMechanicFactory.get();
+            if(factory == null) return false;
+            MiscMechanic mechanic = factory.getMechanic(item);
             return mechanic != null && !mechanic.isAllowedInVanillaRecipes();
         })) {
             event.getInventory().setResult(null);
