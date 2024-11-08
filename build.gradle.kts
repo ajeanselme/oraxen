@@ -7,10 +7,10 @@ import kotlin.io.path.listDirectoryEntries
 plugins {
     id("java")
     //id("com.github.johnrengelman.shadow") version "8.1.1"
-    id("xyz.jpenilla.run-paper") version "2.2.4"
+    id("xyz.jpenilla.run-paper") version "2.3.1"
     id("net.minecrell.plugin-yml.bukkit") version "0.6.0" // Generates plugin.yml
-    id("io.papermc.paperweight.userdev") version "1.7.1" apply false
-    id("io.github.goooler.shadow") version "8.1.7"
+    id("io.papermc.paperweight.userdev") version "1.7.2" apply false
+    id("io.github.goooler.shadow") version "8.1.8"
     alias(libs.plugins.mia.publication)
 }
 
@@ -37,7 +37,7 @@ val spigotPluginPath = project.findProperty("oraxen_spigot_plugin_path")?.toStri
 val pluginVersion: String by project
 val commandApiVersion = "9.5.3"
 val adventureVersion = "4.17.0"
-val platformVersion = "4.3.3"
+val platformVersion = "4.3.4"
 val googleGsonVersion = "2.10.1"
 val apacheLang3Version = "3.14.0"
 group = "io.th0rgal"
@@ -79,8 +79,8 @@ allprojects {
         compileOnly("net.kyori:adventure-text-serializer-plain:$adventureVersion")
         compileOnly("net.kyori:adventure-text-serializer-ansi:$adventureVersion")
         compileOnly("net.kyori:adventure-platform-bukkit:$platformVersion")
-        compileOnly("com.comphenix.protocol:ProtocolLib:5.3.0-SNAPSHOT")
-        compileOnly("me.clip:placeholderapi:2.11.4")
+        compileOnly("com.comphenix.protocol:ProtocolLib:5.3.0")
+        compileOnly("me.clip:placeholderapi:2.11.6")
         compileOnly("me.gabytm.util:actions-core:$actionsVersion")
         compileOnly("org.springframework:spring-expression:6.0.6")
         compileOnly("io.lumine:Mythic-Dist:5.7.0-SNAPSHOT")
@@ -104,7 +104,7 @@ allprojects {
         implementation("team.unnamed:creative-api:1.7.3") { exclude("net.kyori") }
         implementation("dev.jorel:commandapi-bukkit-shade:$commandApiVersion")
         implementation("org.bstats:bstats-bukkit:3.0.0")
-        implementation("io.th0rgal:protectionlib:1.6.0")
+        implementation("io.th0rgal:protectionlib:1.6.2")
         implementation("com.github.stefvanschie.inventoryframework:IF:0.10.12")
         implementation("com.jeff-media:custom-block-data:2.2.2")
         implementation("com.jeff-media:MorePersistentDataTypes:2.4.0")
