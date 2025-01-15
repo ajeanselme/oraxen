@@ -39,11 +39,11 @@ public class RecipesView {
         }
 
         // Close RecipeShowcase inventory button
-        pane.addItem(new GuiItem((OraxenItems.getItemById("exit_icon") == null
-                ? new ItemBuilder(Material.BARRIER)
-                : OraxenItems.getItemById("exit_icon"))
-                .setDisplayName(Message.EXIT_MENU.toSerializedString()).build(),
-                (event -> event.getWhoClicked().closeInventory())), 4, 5);
+//        pane.addItem(new GuiItem((OraxenItems.getItemById("exit_icon") == null
+//                ? new ItemBuilder(Material.BARRIER)
+//                : OraxenItems.getItemById("exit_icon"))
+//                .setDisplayName(Message.EXIT_MENU.toSerializedString()).build(),
+//                (event -> event.getWhoClicked().closeInventory())), 4, 5);
 
         // Previous Page button
         if (page > 0)
