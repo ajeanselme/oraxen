@@ -24,12 +24,17 @@ public class SkinMechanicListener implements Listener {
         if (factory.isNotImplementedIn(skinID)
             || SkinnableMechanicFactory.get().isNotImplementedIn(skinnableID))
             return;
-        if (skin == null || skinnable == null) return;
+        if (skinnable == null) return;
 
         ItemMeta skinMeta = skin.getItemMeta();
         ItemMeta skinnableMeta = skinnable.getItemMeta();
         if (skinMeta == null || skinnableMeta == null) return;
-        if (!skinMeta.hasCustomModelData() || skin.getType() != skinnable.getType()) return;
+
+        SkinMechanic skinMechanic = (SkinMechanic) factory.getMechanic(skinID);
+
+//        if (!skinMeta.hasCustomModelData() || skin.getType() != skinnable.getType()) return;
+        System.out.println(skinMechanic.canApplyOn.contains(skinnable.getType()));
+        if (!skinMeta.hasCustomModelData() || !skinMechanic.canApplyOn.contains(skinnable.getType())) return;
 
         int changeSkin = skinMeta.getCustomModelData();
 
@@ -38,7 +43,6 @@ public class SkinMechanicListener implements Listener {
         skinnableMeta.setCustomModelData(changeSkin);
         skinnable.setItemMeta(skinnableMeta);
 
-        SkinMechanic skinMechanic = (SkinMechanic) factory.getMechanic(skinID);
 
         if (skinMechanic.doConsume())
             skin.setAmount(skin.getAmount() - 1);
